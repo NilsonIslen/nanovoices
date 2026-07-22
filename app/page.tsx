@@ -254,6 +254,10 @@ export default function Home() {
               </button>
             </fieldset>
 
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Saldo oculto no es privacidad total: Nano es público y la posición puede dar pistas.
+            </p>
+
             {error ? <p className="mt-4 text-sm font-medium text-red-700">{error}</p> : null}
 
             <button
@@ -279,15 +283,11 @@ export default function Home() {
       ) : null}
 
       <section className="mx-auto max-w-6xl px-4 pb-8 pt-4 md:px-6 md:pt-5">
-        <div className="mb-2">
+        <div className="mb-1">
           <div>
             <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">Ranking</h2>
           </div>
         </div>
-
-        <p className="mb-4 rounded border border-[var(--nano-line)] bg-white px-4 py-3 text-sm leading-6 text-slate-600">
-          Saldo oculto no es privacidad total: Nano es público y la posición puede dar pistas.
-        </p>
 
         {rankingError ? (
           <p className="mb-5 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
