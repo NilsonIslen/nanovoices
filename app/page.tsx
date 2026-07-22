@@ -175,17 +175,17 @@ export default function Home() {
                   NanoVoices
                 </p>
                 <h1 className="text-3xl font-semibold text-[var(--nano-deep)] md:text-5xl">
-                  Posicionamiento de mensajes por cuentas Nano
+                  Más saldo, más visible
                 </h1>
               </div>
             </div>
             <p className="max-w-xl text-base leading-7 text-slate-700">
-              Publica o actualiza un mensaje con 0,01 XNO. Tu posición depende del saldo de tu cuenta.
+              Publica o actualiza un mensaje con 0,01 XNO.
             </p>
           </div>
 
           <form
-            className="rounded border border-[var(--nano-line)] bg-[#fbfdff] p-4 shadow-sm md:p-5"
+            className="rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-4 shadow-sm md:p-5"
             onSubmit={(event) => {
               event.preventDefault();
               submitPublication(false);
@@ -196,7 +196,7 @@ export default function Home() {
             </label>
             <input
               id="nanoAddress"
-              className="focus-ring mt-2 w-full rounded border border-slate-300 bg-white px-3 py-3 text-sm"
+              className="focus-ring mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
               value={nanoAddress}
               onChange={(event) => setNanoAddress(event.target.value)}
               placeholder="nano_..."
@@ -213,7 +213,7 @@ export default function Home() {
             </div>
             <textarea
               id="message"
-              className="focus-ring mt-2 min-h-28 w-full resize-y rounded border border-slate-300 bg-white px-3 py-3 text-sm"
+              className="focus-ring mt-2 min-h-28 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
               value={message}
               maxLength={300}
               onChange={(event) => setMessage(event.target.value)}
@@ -223,7 +223,7 @@ export default function Home() {
               <legend className="sr-only">Visibilidad del saldo</legend>
               <button
                 type="button"
-                className={`rounded border px-3 py-3 text-sm font-semibold ${
+                className={`rounded-xl border px-3 py-3 text-sm font-semibold ${
                   showBalance
                     ? "border-[var(--nano-blue)] bg-blue-50 text-[var(--nano-deep)]"
                     : "border-slate-300 bg-white text-slate-600"
@@ -234,7 +234,7 @@ export default function Home() {
               </button>
               <button
                 type="button"
-                className={`rounded border px-3 py-3 text-sm font-semibold ${
+                className={`rounded-xl border px-3 py-3 text-sm font-semibold ${
                   !showBalance
                     ? "border-[var(--nano-blue)] bg-blue-50 text-[var(--nano-deep)]"
                     : "border-slate-300 bg-white text-slate-600"
@@ -248,7 +248,7 @@ export default function Home() {
             {error ? <p className="mt-4 text-sm font-medium text-red-700">{error}</p> : null}
 
             <button
-              className="focus-ring mt-5 w-full rounded bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="focus-ring mt-5 w-full rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               disabled={loading}
             >
               {loading ? "Preparando..." : "Publicar o actualizar mensaje"}
@@ -271,9 +271,6 @@ export default function Home() {
         <div className="mb-5">
           <div>
             <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">Ranking</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Solo cuentas verificadas. Mayor saldo, mayor posición.
-            </p>
           </div>
         </div>
 
