@@ -179,18 +179,19 @@ export default function Home() {
                 </h1>
               </div>
             </div>
-            <p className="max-w-xl text-base leading-7 text-slate-700">
-              Publica o actualiza un mensaje con 0,01 XNO.
-            </p>
           </div>
 
-          <form
-            className="rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-4 shadow-sm md:p-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              submitPublication(false);
-            }}
-          >
+          <div>
+            <p className="mb-3 text-sm font-semibold text-slate-700">
+              Publica o actualiza un mensaje con 0,01 XNO.
+            </p>
+            <form
+              className="rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-4 shadow-sm md:p-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitPublication(false);
+              }}
+            >
             <label className="block text-sm font-semibold text-slate-800" htmlFor="nanoAddress">
               Tu cuenta Nano
             </label>
@@ -253,7 +254,8 @@ export default function Home() {
             >
               {loading ? "Preparando..." : "Publicar o actualizar mensaje"}
             </button>
-          </form>
+            </form>
+          </div>
         </div>
       </section>
 
