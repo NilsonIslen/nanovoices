@@ -164,7 +164,7 @@ export default function Home() {
   return (
     <main className="min-h-screen">
       <section className="border-b border-[var(--nano-line)] bg-white">
-        <div className="mx-auto grid max-w-6xl gap-4 px-4 py-8 md:grid-cols-[0.95fr_1.05fr] md:gap-6 md:px-6 md:py-10">
+        <div className="mx-auto grid max-w-6xl gap-4 px-4 pb-6 pt-0 md:grid-cols-[0.95fr_1.05fr] md:gap-6 md:px-6 md:pb-8 md:pt-0">
           <div>
             <div className="mb-2 flex items-center gap-3">
               <div
@@ -453,8 +453,8 @@ function RankingCard({ item }: { item: RankingItem }) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="break-all font-mono text-xs text-slate-500">{item.nanoAddress}</p>
-            <div className="relative mt-3 rounded border border-[var(--nano-line)] bg-[#f7fbff] px-4 py-3 shadow-sm">
-              <span className="absolute -left-2 top-4 h-4 w-4 rotate-45 border-b border-l border-[var(--nano-line)] bg-[#f7fbff]" />
+            <div className="relative mt-3 rounded-xl border-2 border-blue-200 bg-[#f7fbff] px-4 py-3 shadow-[0_10px_28px_rgba(32,116,205,0.08)]">
+              <span className="absolute -left-[9px] top-4 h-4 w-4 rotate-45 border-b-2 border-l-2 border-blue-200 bg-[#f7fbff]" />
               <LinkifiedMessage
                 className="relative text-lg leading-8 text-[var(--nano-deep)]"
                 text={item.message}
