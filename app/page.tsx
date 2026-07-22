@@ -95,6 +95,12 @@ export default function Home() {
     setPage(nextPage);
   }
 
+  function cancelPaymentView() {
+    setPaymentRequest(null);
+    setRequestStatus(null);
+    setError("");
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -156,9 +162,9 @@ export default function Home() {
   return (
     <main className="min-h-screen">
       <section className="border-b border-[var(--nano-line)] bg-white">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 md:grid-cols-[0.95fr_1.05fr] md:px-6 md:py-10">
+        <div className="mx-auto grid max-w-6xl gap-4 px-4 py-8 md:grid-cols-[0.95fr_1.05fr] md:gap-6 md:px-6 md:py-10">
           <div>
-            <div className="mb-5 flex items-center gap-3">
+            <div className="mb-2 flex items-center gap-3">
               <div
                 aria-hidden="true"
                 className="grid h-12 w-12 place-items-center"
@@ -266,6 +272,7 @@ export default function Home() {
           remainingSeconds={remainingSeconds}
           completed={paymentCompleted}
           onReplacePending={() => submitPublication(true)}
+          onCancel={cancelPaymentView}
         />
       ) : null}
 
@@ -311,12 +318,14 @@ function PaymentPanel({
   remainingSeconds,
   completed,
   onReplacePending,
+  onCancel,
 }: {
   request: PaymentRequest;
   status: RequestStatus | null;
   remainingSeconds: number;
   completed: boolean;
   onReplacePending: () => void;
+  onCancel: () => void;
 }) {
   return (
     <section className="border-b border-[var(--nano-line)] bg-[#eef7fd]">
@@ -334,12 +343,21 @@ function PaymentPanel({
             Envía desde la misma cuenta que escribiste.
           </p>
           {!completed ? (
-            <a
-              className="focus-ring mt-4 inline-flex rounded-xl bg-[var(--nano-blue)] px-4 py-3 text-sm font-semibold text-white"
-              href={request.paymentUri}
-            >
-              Pagar con wallet Nano
-            </a>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                className="focus-ring inline-flex rounded-xl bg-[var(--nano-blue)] px-4 py-3 text-sm font-semibold text-white"
+                href={request.paymentUri}
+              >
+                Pagar con wallet Nano
+              </a>
+              <button
+                className="focus-ring rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                type="button"
+                onClick={onCancel}
+              >
+                Cancelar
+              </button>
+            </div>
           ) : null}
           {request.reused && !completed ? (
             <div className="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
