@@ -333,6 +333,14 @@ function PaymentPanel({
           <p className="mt-2 text-sm leading-6 text-slate-700">
             Envía desde la misma cuenta que escribiste.
           </p>
+          {!completed ? (
+            <a
+              className="focus-ring mt-4 inline-flex rounded-xl bg-[var(--nano-blue)] px-4 py-3 text-sm font-semibold text-white"
+              href={request.paymentUri}
+            >
+              Pagar con wallet Nano
+            </a>
+          ) : null}
           {request.reused && !completed ? (
             <div className="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
               Ya hay una solicitud pendiente para esta cuenta.
