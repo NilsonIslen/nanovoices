@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --nano-blue: #209ce9;
+  --nano-deep: #0b1725;
+  --nano-ink: #102033;
+  --nano-muted: #64748b;
+  --nano-line: #d8e7f3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f8fbfd;
+  color: var(--nano-ink);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.focus-ring:focus {
+  outline: 3px solid rgba(32, 156, 233, 0.25);
+  outline-offset: 2px;
+}

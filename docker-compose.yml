@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nanovoices
+      POSTGRES_USER: nanovoices
+      POSTGRES_PASSWORD: nanovoices
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    command: sh -c "npx prisma migrate deploy && npm run start"
+
+  worker:
+    build: .
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    command: sh -c "npx prisma migrate deploy && npm run worker"
+
+volumes:
+  postgres_data:

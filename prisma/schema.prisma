@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model VerifiedAccount {
+  id                  String           @id @default(cuid())
+  nanoAddress         String           @unique
+  currentMessage      String
+  showBalance         Boolean          @default(true)
+  cachedBalanceRaw    String           @default("0")
+  balanceUpdatedAt    DateTime?
+  verifiedAt          DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  hiddenByModeration  Boolean          @default(false)
+  moderationReason    String?
+  moderationUpdatedAt DateTime?
+  histories           MessageHistory[]
+
+  @@index([hiddenByModeration, nanoAddress])
+  @@index([verifiedAt])
+}
+
+model PublicationRequest {
+  id             String                   @id @default(cuid())
+  nanoAddress    String
+  pendingMessage String
+  showBalance    Boolean                  @default(true)
+  status         PublicationRequestStatus @default(PENDING)
+  createdAt      DateTime                 @default(now())
+  expiresAt      DateTime
+  completedAt    DateTime?
+  paymentHash    String?
+  payments       Payment[]
+
+  @@index([nanoAddress, status, expiresAt])
+  @@index([createdAt])
+}
+
+model Payment {
+  id                 String         @id @default(cuid())
+  blockHash          String         @unique
+  sourceAddress      String
+  destinationAddress String
+  amountRaw          String
+  detectedAt         DateTime       @default(now())
+  confirmedAt        DateTime?
+  requestId          String?
+  request            PublicationRequest? @relation(fields: [requestId], references: [id])
+  status             PaymentStatus  @default(UNASSOCIATED)
+  operationType      OperationType?
+  notes              String?
+
+  @@index([sourceAddress, status])
+  @@index([destinationAddress, detectedAt])
+}
+
+model MessageHistory {
+  id                   String          @id @default(cuid())
+  verifiedAccountId    String
+  verifiedAccount      VerifiedAccount @relation(fields: [verifiedAccountId], references: [id])
+  message              String
+  showBalance          Boolean
+  paymentHash          String
+  publishedAt          DateTime        @default(now())
+  replacedAt           DateTime?
+  hiddenByModeration   Boolean         @default(false)
+  moderationReason     String?
+
+  @@index([verifiedAccountId, publishedAt])
+  @@index([paymentHash])
+}
+
+model AdminAudit {
+  id        String   @id @default(cuid())
+  action    String
+  targetId  String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([action, createdAt])
+}
+
+enum PublicationRequestStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+  REPLACED
+}
+
+enum PaymentStatus {
+  PROCESSED
+  UNASSOCIATED
+  INVALID_AMOUNT
+  INVALID_DESTINATION
+  UNCONFIRMED
+  DUPLICATE
+}
+
+enum OperationType {
+  INITIAL_PUBLICATION
+  UPDATE
+}
