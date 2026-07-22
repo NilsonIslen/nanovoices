@@ -151,6 +151,8 @@ export default function Home() {
       if (data.status === "COMPLETED") {
         clearInterval(interval);
         setRankingRefreshKey((current) => current + 1);
+        setPaymentRequest(null);
+        setRequestStatus(null);
       }
     }, 3000);
 
@@ -430,28 +432,30 @@ function RankingCard({ item }: { item: RankingItem }) {
     >
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex min-w-0 flex-1 gap-3">
-          <div
-            className={`grid h-14 w-14 shrink-0 place-items-center rounded-full font-semibold text-white ${
-              prominent ? "bg-[var(--nano-blue)] text-xl" : "bg-[var(--nano-deep)] text-lg"
-            }`}
-          >
-            #{item.rank}
+          <div className="flex w-20 shrink-0 flex-col items-center gap-2">
+            <div
+              className={`grid h-14 w-14 place-items-center rounded-full font-semibold text-white ${
+                prominent ? "bg-[var(--nano-blue)] text-xl" : "bg-[var(--nano-deep)] text-lg"
+              }`}
+            >
+              #{item.rank}
+            </div>
+            <p className="max-w-20 rounded-full border border-[var(--nano-line)] bg-white px-2 py-1 text-center text-[11px] font-semibold leading-tight text-[var(--nano-deep)]">
+              {item.balanceHidden ? "Saldo oculto" : `${formatRoundedXno(item.balance?.xno ?? "0")} XNO`}
+            </p>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="break-all font-mono text-sm text-slate-700">{item.nanoAddress}</p>
+            <p className="break-all font-mono text-xs text-slate-500">{item.nanoAddress}</p>
             <div className="relative mt-3 rounded border border-[var(--nano-line)] bg-[#f7fbff] px-4 py-3 shadow-sm">
               <span className="absolute -left-2 top-4 h-4 w-4 rotate-45 border-b border-l border-[var(--nano-line)] bg-[#f7fbff]" />
               <LinkifiedMessage
-                className="relative text-base leading-7 text-[var(--nano-deep)]"
+                className="relative text-lg leading-8 text-[var(--nano-deep)]"
                 text={item.message}
               />
             </div>
           </div>
         </div>
         <div className="shrink-0 pl-17 text-left md:pl-0 md:text-right">
-          <p className="font-semibold text-[var(--nano-deep)]">
-            {item.balanceHidden ? "Saldo oculto" : `${item.balance?.xno ?? "0"} XNO`}
-          </p>
           <p className="mt-1 text-sm text-slate-500">
             Actualizado {new Date(item.updatedAt).toLocaleDateString("es")}
           </p>
@@ -459,6 +463,18 @@ function RankingCard({ item }: { item: RankingItem }) {
       </div>
     </article>
   );
+}
+
+function formatRoundedXno(value: string) {
+  const [wholeRaw = "0", fractionRaw = ""] = value.split(".");
+  const whole = wholeRaw.replace(/[^\d]/g, "") || "0";
+  const shouldRoundUp = Number(fractionRaw[0] ?? "0") >= 5;
+
+  try {
+    return (BigInt(whole) + (shouldRoundUp ? 1n : 0n)).toString();
+  } catch {
+    return whole;
+  }
 }
 
 function useCountdown(expiresAt?: string) {
