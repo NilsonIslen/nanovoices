@@ -278,14 +278,14 @@ export default function Home() {
         />
       ) : null}
 
-      <section className="mx-auto max-w-6xl px-4 py-8 md:px-6">
-        <div className="mb-5">
+      <section className="mx-auto max-w-6xl px-4 pb-8 pt-4 md:px-6 md:pt-5">
+        <div className="mb-2">
           <div>
             <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">Ranking</h2>
           </div>
         </div>
 
-        <p className="mb-5 rounded border border-[var(--nano-line)] bg-white px-4 py-3 text-sm leading-6 text-slate-600">
+        <p className="mb-4 rounded border border-[var(--nano-line)] bg-white px-4 py-3 text-sm leading-6 text-slate-600">
           Saldo oculto no es privacidad total: Nano es público y la posición puede dar pistas.
         </p>
 
@@ -440,9 +440,16 @@ function RankingCard({ item }: { item: RankingItem }) {
             >
               #{item.rank}
             </div>
-            <p className="max-w-20 rounded-full border border-[var(--nano-line)] bg-white px-2 py-1 text-center text-[11px] font-semibold leading-tight text-[var(--nano-deep)]">
-              {item.balanceHidden ? "Saldo oculto" : `${formatRoundedXno(item.balance?.xno ?? "0")} XNO`}
-            </p>
+            <div className="max-w-20 rounded-2xl border border-[var(--nano-line)] bg-white px-2 py-1.5 text-center font-semibold leading-tight text-[var(--nano-deep)]">
+              {item.balanceHidden ? (
+                <span className="block text-[11px]">Saldo oculto</span>
+              ) : (
+                <>
+                  <span className="block text-sm">{formatRoundedXno(item.balance?.xno ?? "0")}</span>
+                  <span className="block text-[10px] uppercase tracking-[0.08em] text-slate-500">XNO</span>
+                </>
+              )}
+            </div>
           </div>
           <div className="min-w-0 flex-1">
             <p className="break-all font-mono text-xs text-slate-500">{item.nanoAddress}</p>
