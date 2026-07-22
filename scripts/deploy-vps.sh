@@ -9,6 +9,13 @@ WORKER_SERVICE="${WORKER_SERVICE:-nanovoices-worker.service}"
 echo "Entrando a ${APP_DIR}"
 cd "$APP_DIR"
 
+if [ -f .env.local ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env.local
+  set +a
+fi
+
 echo "Descargando cambios desde GitHub (${BRANCH})"
 git fetch origin "$BRANCH"
 git pull --ff-only origin "$BRANCH"
