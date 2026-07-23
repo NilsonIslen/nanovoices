@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LinkifiedMessage } from "@/components/LinkifiedMessage";
 import { rawToXno } from "@/lib/nano/amount";
 import { prisma } from "@/lib/prisma";
+import { LevelNavigator } from "./LevelNavigator";
 import { ReplyThread } from "./ReplyThread";
 
 export const dynamic = "force-dynamic";
@@ -97,9 +97,13 @@ function ThreadPage({
   return (
     <main className="min-h-screen bg-[#f8fbfd] px-4 py-5">
       <section className="mx-auto max-w-3xl">
-        <Link href="/" className="text-sm font-semibold text-[var(--nano-blue)]">
-          Volver al ranking
-        </Link>
+        <LevelNavigator
+          currentLevel={currentLevel + 1}
+          levels={[
+            { level: 1, href: "/" },
+            ...chain.map((node) => ({ level: node.level + 1, href: `/p/${node.id}` })),
+          ]}
+        />
         <h1 className="mt-4 text-2xl font-semibold text-[var(--nano-deep)]">
           Hilo hasta nivel {currentLevel}
         </h1>
