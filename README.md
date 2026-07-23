@@ -1,8 +1,8 @@
 # NanoVoices
 
-NanoVoices es un ranking voluntario de cuentas Nano (XNO). Una cuenta aparece solo cuando su propietario publica un mensaje y demuestra control enviando exactamente `0,01 XNO` desde esa misma cuenta hacia la cuenta receptora oficial.
+NanoVoices es un ranking voluntario de cuentas Nano (XNO). Una cuenta aparece cuando su propietario paga exactamente `0,02 XNO` hacia la cuenta receptora oficial y luego guarda un mensaje asociado a la cuenta pagadora detectada.
 
-Cada transferencia válida autoriza una publicación o actualización. No hay registro, correo, contraseña, alias ni perfiles tradicionales: la identidad pública es la dirección Nano.
+Cada transferencia válida autoriza una publicación o actualización. No hay registro, correo, contraseña, alias ni perfiles tradicionales.
 
 ## Arquitectura
 
@@ -43,7 +43,7 @@ npm run worker
 - `NANO_RPC_TOKEN`: token opcional para un proxy RPC.
 - `NANO_WS_URL`: WebSocket del nodo Nano.
 - `NANOVOICES_RECEIVER_ADDRESS`: cuenta oficial receptora.
-- `REQUIRED_PAYMENT_RAW`: debe ser `10000000000000000000000000000`.
+- `REQUIRED_PAYMENT_RAW`: debe ser `20000000000000000000000000000`.
 - `NANO_EXPLORER_ACCOUNT_URL`: plantilla con `{address}`.
 - `PUBLIC_APP_URL`: URL pública, por ejemplo `https://nanovoices.com`.
 - `BALANCE_REFRESH_SECONDS`: intervalo de actualización de saldos. Recomendado: `60`.
@@ -73,24 +73,25 @@ El backend usa:
 - `receivable` de la cuenta receptora para pagos confirmados pendientes de recibir.
 - `account_history` de la cuenta receptora para recuperación de bloques ya recibidos.
 - `accounts_balances` para consultar solo cuentas verificadas.
-- `nano_to_raw` si el nodo lo soporta, para confirmar que `0.01` XNO equivale a `10000000000000000000000000000` raw.
+- `nano_to_raw` si el nodo lo soporta, para confirmar que `0.02` XNO equivale a `20000000000000000000000000000` raw.
 
 El RPC puede vivir detrás de red privada, túnel o proxy autenticado. No debe publicarse directamente en internet.
 
 ## Funcionamiento de Pagos
 
-1. El usuario crea una solicitud con dirección, mensaje y visibilidad del saldo.
+1. El usuario crea una solicitud de pago en el nivel actual del hilo.
 2. La solicitud vence en 15 minutos.
 3. Se muestra una única cuenta receptora y un QR `nano:` con el importe raw exacto.
 4. El worker escucha confirmaciones por WebSocket.
 5. Cada hash se verifica por RPC.
-6. El bloque debe ser `send`, confirmado, hacia la cuenta receptora, desde la dirección indicada y por el raw exacto.
-7. Dentro de una transacción se registra `Payment`, se completa `PublicationRequest`, se crea/actualiza `VerifiedAccount` y se guarda `MessageHistory`.
-8. Si la solicitud es una respuesta, se crea o reemplaza una `Reply` dentro del subranking del mensaje respondido.
+6. El bloque debe ser `send`, confirmado, hacia la cuenta receptora y por el raw exacto.
+7. La solicitud reclama un pago confirmado no asociado y usa la cuenta pagadora como identidad.
+8. Después del pago, el editor se abre con el mensaje existente de esa cuenta en ese nivel, o vacío si no existe.
+9. Al guardar, se crea o actualiza el mensaje y todos los saldos se muestran públicamente.
 
-Si el pago no coincide con una solicitud pendiente, se guarda como no asociado y no publica nada.
+Si el pago no coincide con una solicitud pendiente, se guarda como no asociado y no publica nada hasta que una solicitud compatible lo reclame.
 
-Cada mensaje principal tiene una URL permanente con su propio subranking de respuestas. Responder cuesta también `0,01 XNO`, usa la misma cuenta receptora oficial y exige que el pago salga desde la cuenta Nano escrita en el formulario de respuesta. Las respuestas se ordenan por saldo confirmado de la cuenta que responde.
+Cada mensaje tiene una URL permanente con su propio subranking de respuestas hasta el nivel 100. Responder cuesta también `0,02 XNO` y las respuestas se ordenan por saldo confirmado de la cuenta que responde. Si una cuenta edita un mensaje intermedio, se eliminan automáticamente los descendientes de ese mensaje y el hilo queda cortado en ese nivel.
 
 ## Recuperación Después de Reinicios
 
@@ -98,7 +99,7 @@ El worker revisa periódicamente `receivable` y `account_history` de la cuenta r
 
 ## Ranking y Saldos
 
-Solo se consultan direcciones registradas en NanoVoices. No se recorre el ledger. El ranking principal se ordena por `cachedBalanceRaw` descendente y, en empate, por la verificación más antigua. Los subrankings de respuestas se ordenan por saldo confirmado descendente y, en empate, por la respuesta más antigua. Si una cuenta oculta el saldo, la API pública no envía el saldo exacto.
+Solo se consultan cuentas registradas en NanoVoices. No se recorre el ledger. El ranking principal se ordena por `cachedBalanceRaw` descendente y, en empate, por la verificación más antigua. Los subrankings de respuestas se ordenan por saldo confirmado descendente y, en empate, por la respuesta más antigua. Todos los mensajes públicos muestran saldo y la interfaz pública no muestra direcciones Nano.
 
 ## Administración
 
@@ -149,4 +150,4 @@ Conserva especialmente tablas `Payment`, `PublicationRequest`, `VerifiedAccount`
 npm test
 ```
 
-Las pruebas iniciales cubren la conversión de `0,01 XNO` a raw y la validación crítica de bloques de pago.
+Las pruebas iniciales cubren la conversión de `0,02 XNO` a raw y la validación crítica de bloques de pago.

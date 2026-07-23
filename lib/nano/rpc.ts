@@ -181,11 +181,11 @@ export async function confirmRequiredAmountWithNode() {
   try {
     const data = await nanoRpc<{ amount?: string }>({
       action: "nano_to_raw",
-      amount: "0.01",
+      amount: "0.02",
     });
 
     if (data.amount && data.amount !== REQUIRED_PAYMENT_RAW) {
-      throw new Error(`El nodo devolvió ${data.amount} raw para 0.01 XNO`);
+      throw new Error(`El nodo devolvió ${data.amount} raw para 0.02 XNO`);
     }
 
     return true;

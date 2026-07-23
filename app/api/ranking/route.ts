@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { rawToXno } from "@/lib/nano/amount";
 import { prisma } from "@/lib/prisma";
+import { getAccountStats } from "@/lib/threads";
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,12 +26,12 @@ export async function GET(request: NextRequest) {
         id: true,
         nanoAddress: true,
         currentMessage: true,
-        showBalance: true,
         cachedBalanceRaw: true,
         verifiedAt: true,
         updatedAt: true,
       },
     });
+    const stats = await getAccountStats(prisma, accounts.map((account) => account.id));
 
     const ranked = accounts
       .sort((a, b) => {
@@ -41,18 +42,16 @@ export async function GET(request: NextRequest) {
       .map((account, index) => ({
         id: account.id,
         rank: index + 1,
-        nanoAddress: account.nanoAddress,
         message: account.currentMessage,
         updatedAt: account.updatedAt.toISOString(),
         verifiedAt: account.verifiedAt.toISOString(),
         publicUrl: `/p/${account.id}`,
-        balance: account.showBalance
-          ? {
-              raw: account.cachedBalanceRaw,
-              xno: rawToXno(account.cachedBalanceRaw),
-            }
-          : null,
-        balanceHidden: !account.showBalance,
+        balance: {
+          raw: account.cachedBalanceRaw,
+          xno: rawToXno(account.cachedBalanceRaw),
+        },
+        directReplies: stats.get(account.id)?.directReplies ?? 0,
+        threadLevels: stats.get(account.id)?.threadLevels ?? 1,
       }));
 
     const offset = (page - 1) * limit;

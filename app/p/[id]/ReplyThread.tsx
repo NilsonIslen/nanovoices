@@ -3,48 +3,38 @@
 import { useEffect, useMemo, useState } from "react";
 import { LinkifiedMessage } from "@/components/LinkifiedMessage";
 
-type ParentPublication = {
-  id: string;
-  nanoAddress: string;
-};
-
 type ReplyItem = {
   id: string;
   rank: number;
-  nanoAddress: string;
   message: string;
   updatedAt: string;
+  publicUrl: string;
   balance: { raw: string; xno: string } | null;
-  balanceHidden: boolean;
+  directReplies: number;
+  threadLevels: number;
 };
 
 type PaymentRequest = {
   id: string;
-  nanoAddress: string;
   receiverAddress: string;
   amountNano: string;
   expiresAt: string;
   status: string;
-  reused: boolean;
   paymentUri: string;
   qrCodeDataUrl: string;
 };
 
 type RequestStatus = {
   status: string;
-  expiresAt: string;
-  completedAt: string | null;
-  paymentHash: string | null;
-  rank: number | null;
+  existingMessage: string;
 };
 
 const REFRESH_MS = 30000;
 
-export function ReplyThread({ parent }: { parent: ParentPublication }) {
-  const [nanoAddress, setNanoAddress] = useState("");
+export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLevel: number }) {
   const [message, setMessage] = useState("");
-  const [showBalance, setShowBalance] = useState(true);
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
+  const [paidRequestId, setPaidRequestId] = useState<string | null>(null);
   const [requestStatus, setRequestStatus] = useState<RequestStatus | null>(null);
   const [replies, setReplies] = useState<ReplyItem[]>([]);
   const [error, setError] = useState("");
@@ -52,22 +42,17 @@ export function ReplyThread({ parent }: { parent: ParentPublication }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const charsLeft = 300 - message.length;
   const remainingSeconds = useCountdown(paymentRequest?.expiresAt);
+  const editorReady = Boolean(paidRequestId);
 
-  async function submitReply(replacePending = false) {
+  async function startPayment() {
     setError("");
     setLoading(true);
 
     try {
-      const response = await fetch("/api/reply-requests", {
+      const response = await fetch("/api/publication-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          parentAccountId: parent.id,
-          nanoAddress,
-          message,
-          showBalance,
-          replacePending,
-        }),
+        body: JSON.stringify({ parentId }),
       });
       const data = await readJsonResponse<PaymentRequest & { error?: string }>(response);
 
@@ -76,7 +61,33 @@ export function ReplyThread({ parent }: { parent: ParentPublication }) {
       }
 
       setPaymentRequest(data);
+      setPaidRequestId(null);
       setRequestStatus(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Error inesperado.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function publishPaidMessage() {
+    if (!paidRequestId) return;
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch(`/api/publication-requests/${paidRequestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const data = await readJsonResponse<{ error?: string }>(response);
+      if (!response.ok) throw new Error(data.error ?? "No se pudo guardar la respuesta.");
+      setMessage("");
+      setPaidRequestId(null);
+      setPaymentRequest(null);
+      setRequestStatus(null);
+      setRefreshKey((current) => current + 1);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
     } finally {
@@ -88,7 +99,7 @@ export function ReplyThread({ parent }: { parent: ParentPublication }) {
     let cancelled = false;
 
     async function loadReplies() {
-      const response = await fetch(`/api/publications/${parent.id}/replies`);
+      const response = await fetch(`/api/publications/${parentId}/replies`);
       const data = await readJsonResponse<{ items: ReplyItem[]; error?: string }>(response);
       if (!cancelled && response.ok) {
         setReplies(data.items);
@@ -99,7 +110,7 @@ export function ReplyThread({ parent }: { parent: ParentPublication }) {
     return () => {
       cancelled = true;
     };
-  }, [parent.id, refreshKey]);
+  }, [parentId, refreshKey]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -120,10 +131,9 @@ export function ReplyThread({ parent }: { parent: ParentPublication }) {
 
       if (data.status === "COMPLETED") {
         clearInterval(interval);
+        setPaidRequestId(paymentRequest.id);
+        setMessage(data.existingMessage ?? "");
         setPaymentRequest(null);
-        setRequestStatus(null);
-        setMessage("");
-        setRefreshKey((current) => current + 1);
       }
     }, 3000);
 
@@ -136,64 +146,40 @@ export function ReplyThread({ parent }: { parent: ParentPublication }) {
         className="rounded-2xl border border-[var(--nano-line)] bg-white p-4 shadow-sm"
         onSubmit={(event) => {
           event.preventDefault();
-          submitReply(false);
+          if (editorReady) {
+            publishPaidMessage();
+          } else {
+            startPayment();
+          }
         }}
       >
-        <p className="mb-3 text-sm font-semibold text-slate-700">Responder con 0,01 XNO.</p>
+        <p className="mb-3 text-sm font-semibold text-slate-700">
+          Publicar en el nivel {nextLevel} cuesta 0,02 XNO.
+        </p>
 
-        <label className="block text-sm font-semibold text-slate-800" htmlFor="replyNanoAddress">
-          Tu cuenta Nano
-        </label>
-        <input
-          id="replyNanoAddress"
-          className="focus-ring mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
-          value={nanoAddress}
-          onChange={(event) => setNanoAddress(event.target.value)}
-          placeholder="nano_..."
-          autoComplete="off"
-        />
-
-        <div className="mt-4 flex items-center justify-between gap-4">
-          <label className="block text-sm font-semibold text-slate-800" htmlFor="replyMessage">
-            Tu respuesta
-          </label>
-          <span className={charsLeft < 0 ? "text-sm text-red-600" : "text-sm text-slate-500"}>
-            {message.length}/300
-          </span>
-        </div>
-        <textarea
-          id="replyMessage"
-          className="focus-ring mt-2 min-h-24 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
-          value={message}
-          maxLength={300}
-          onChange={(event) => setMessage(event.target.value)}
-        />
-
-        <fieldset className="mt-4 grid grid-cols-2 gap-2">
-          <legend className="sr-only">Visibilidad del saldo</legend>
-          <button
-            type="button"
-            className={`rounded-xl border px-3 py-3 text-sm font-semibold ${
-              showBalance
-                ? "border-[var(--nano-blue)] bg-blue-50 text-[var(--nano-deep)]"
-                : "border-slate-300 bg-white text-slate-600"
-            }`}
-            onClick={() => setShowBalance(true)}
-          >
-            Mostrar mi saldo
-          </button>
-          <button
-            type="button"
-            className={`rounded-xl border px-3 py-3 text-sm font-semibold ${
-              !showBalance
-                ? "border-[var(--nano-blue)] bg-blue-50 text-[var(--nano-deep)]"
-                : "border-slate-300 bg-white text-slate-600"
-            }`}
-            onClick={() => setShowBalance(false)}
-          >
-            Ocultar mi saldo
-          </button>
-        </fieldset>
+        {editorReady ? (
+          <>
+            <div className="flex items-center justify-between gap-4">
+              <label className="block text-sm font-semibold text-slate-800" htmlFor="replyMessage">
+                Tu mensaje
+              </label>
+              <span className={charsLeft < 0 ? "text-sm text-red-600" : "text-sm text-slate-500"}>
+                {message.length}/300
+              </span>
+            </div>
+            <textarea
+              id="replyMessage"
+              className="focus-ring mt-2 min-h-24 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+              value={message}
+              maxLength={300}
+              onChange={(event) => setMessage(event.target.value)}
+            />
+          </>
+        ) : (
+          <p className="text-sm leading-6 text-slate-700">
+            Primero realiza el pago. Después se abrirá el editor para la cuenta detectada.
+          </p>
+        )}
 
         {error ? <p className="mt-4 text-sm font-medium text-red-700">{error}</p> : null}
 
@@ -201,7 +187,7 @@ export function ReplyThread({ parent }: { parent: ParentPublication }) {
           className="focus-ring mt-5 w-full rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           disabled={loading}
         >
-          {loading ? "Preparando..." : "Responder"}
+          {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Pagar para publicar"}
         </button>
       </form>
 
@@ -215,7 +201,9 @@ export function ReplyThread({ parent }: { parent: ParentPublication }) {
             />
             <div>
               <h2 className="text-xl font-semibold text-[var(--nano-deep)]">Esperando el pago</h2>
-              <p className="mt-2 text-sm text-slate-700">Envía desde la misma cuenta que escribiste.</p>
+              <p className="mt-2 text-sm text-slate-700">
+                Envía 0,02 XNO desde la cuenta que quieres asociar a este nivel.
+              </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <a
                   className="focus-ring inline-flex rounded-xl bg-[var(--nano-blue)] px-4 py-3 text-sm font-semibold text-white"
@@ -234,18 +222,6 @@ export function ReplyThread({ parent }: { parent: ParentPublication }) {
                   Cancelar
                 </button>
               </div>
-              {paymentRequest.reused ? (
-                <div className="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                  Ya hay una solicitud pendiente para esta cuenta.
-                  <button
-                    className="focus-ring mt-3 block rounded bg-amber-900 px-3 py-2 text-sm font-semibold text-white"
-                    type="button"
-                    onClick={() => submitReply(true)}
-                  >
-                    Reemplazar solicitud pendiente
-                  </button>
-                </div>
-              ) : null}
               <p className="mt-4 text-sm text-slate-700">
                 Estado: <strong>{requestStatus?.status ?? paymentRequest.status}</strong>
               </p>
@@ -258,14 +234,16 @@ export function ReplyThread({ parent }: { parent: ParentPublication }) {
       ) : null}
 
       <div className="mt-5">
-        <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">Respuestas</h2>
+        <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">
+          Ranking de nivel {nextLevel}
+        </h2>
         <div className="mt-2 grid gap-3">
           {replies.map((reply) => (
             <ReplyCard key={reply.id} reply={reply} />
           ))}
           {replies.length === 0 ? (
             <p className="rounded border border-[var(--nano-line)] bg-white px-4 py-3 text-sm text-slate-600">
-              Sin respuestas todavía.
+              Sin mensajes todavía.
             </p>
           ) : null}
         </div>
@@ -283,25 +261,27 @@ function ReplyCard({ reply }: { reply: ReplyItem }) {
             #{reply.rank}
           </div>
           <div className="max-w-20 rounded-2xl border border-[var(--nano-line)] bg-white px-2 py-1.5 text-center font-semibold leading-tight text-[var(--nano-deep)]">
-            {reply.balanceHidden ? (
-              <span className="block text-[11px]">Saldo oculto</span>
-            ) : (
-              <>
-                <span className="block text-sm">{formatRoundedXno(reply.balance?.xno ?? "0")}</span>
-                <span className="block text-[10px] uppercase tracking-[0.08em] text-slate-500">XNO</span>
-              </>
-            )}
+            <span className="block text-sm">{formatRoundedXno(reply.balance?.xno ?? "0")}</span>
+            <span className="block text-[10px] uppercase tracking-[0.08em] text-slate-500">XNO</span>
           </div>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="break-all font-mono text-xs text-slate-500">{reply.nanoAddress}</p>
-          <div className="relative mt-3 rounded-xl border-2 border-blue-200 bg-[#f7fbff] px-4 py-3 shadow-[0_10px_28px_rgba(32,116,205,0.08)]">
+          <div className="relative rounded-xl border-2 border-blue-200 bg-[#f7fbff] px-4 py-3 shadow-[0_10px_28px_rgba(32,116,205,0.08)]">
             <span className="absolute -left-[9px] top-4 h-4 w-4 rotate-45 border-b-2 border-l-2 border-blue-200 bg-[#f7fbff]" />
             <LinkifiedMessage className="relative text-lg leading-8 text-[var(--nano-deep)]" text={reply.message} />
           </div>
-          <p className="mt-2 text-sm text-slate-500">
-            Actualizado {new Date(reply.updatedAt).toLocaleDateString("es")}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+            <span>Actualizado {new Date(reply.updatedAt).toLocaleDateString("es")}</span>
+            <span>
+              {reply.directReplies} respuestas · {reply.threadLevels} niveles
+            </span>
+          </div>
+          <a
+            className="focus-ring mt-3 inline-flex rounded-xl border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]"
+            href={reply.publicUrl}
+          >
+            Abrir hilo
+          </a>
         </div>
       </div>
     </article>

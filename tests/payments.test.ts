@@ -21,9 +21,9 @@ function block(overrides: Partial<NanoBlockInfo> = {}): NanoBlockInfo {
 }
 
 describe("lógica crítica de pagos Nano", () => {
-  it("representa 0,01 XNO como 10^28 raw sin decimales", () => {
-    expect(REQUIRED_PAYMENT_RAW.toString()).toBe("10000000000000000000000000000");
-    expect(rawToXno(REQUIRED_PAYMENT_RAW.toString())).toBe("0.01");
+  it("representa 0,02 XNO como 2 * 10^28 raw sin decimales", () => {
+    expect(REQUIRED_PAYMENT_RAW.toString()).toBe("20000000000000000000000000000");
+    expect(rawToXno(REQUIRED_PAYMENT_RAW.toString())).toBe("0.02");
   });
 
   it("acepta solo bloques send confirmados hacia el receptor con importe exacto", () => {

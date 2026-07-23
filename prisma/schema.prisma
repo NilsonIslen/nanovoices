@@ -29,8 +29,8 @@ model VerifiedAccount {
 
 model PublicationRequest {
   id             String                   @id @default(cuid())
-  nanoAddress    String
-  pendingMessage String
+  nanoAddress    String                   @default("")
+  pendingMessage String                   @default("")
   showBalance    Boolean                  @default(true)
   status         PublicationRequestStatus @default(PENDING)
   createdAt      DateTime                 @default(now())
@@ -40,9 +40,12 @@ model PublicationRequest {
   payments       Payment[]
   replyToAccountId String?
   replyToAccount   VerifiedAccount? @relation("ReplyTarget", fields: [replyToAccountId], references: [id])
+  replyToReplyId String?
+  replyToReply   Reply? @relation("ReplyRequestTarget", fields: [replyToReplyId], references: [id])
 
   @@index([nanoAddress, status, expiresAt])
   @@index([replyToAccountId, status, expiresAt])
+  @@index([replyToReplyId, status, expiresAt])
   @@index([createdAt])
 }
 
@@ -84,6 +87,11 @@ model Reply {
   id                  String          @id @default(cuid())
   parentAccountId     String
   parentAccount       VerifiedAccount @relation(fields: [parentAccountId], references: [id])
+  parentReplyId       String?
+  parentReply         Reply?          @relation("ReplyChildren", fields: [parentReplyId], references: [id])
+  childReplies        Reply[]         @relation("ReplyChildren")
+  replyRequests       PublicationRequest[] @relation("ReplyRequestTarget")
+  level               Int             @default(2)
   nanoAddress         String
   message             String
   showBalance         Boolean         @default(true)
@@ -95,9 +103,11 @@ model Reply {
   hiddenByModeration  Boolean         @default(false)
   moderationReason    String?
 
-  @@unique([parentAccountId, nanoAddress])
+  @@unique([parentReplyId, nanoAddress])
   @@index([nanoAddress])
   @@index([parentAccountId, hiddenByModeration])
+  @@index([parentReplyId, hiddenByModeration])
+  @@index([level])
 }
 
 model AdminAudit {

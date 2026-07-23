@@ -7,6 +7,7 @@ import {
 import { REQUIRED_PAYMENT_RAW, requiredReceiverAddress } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { refreshVerifiedAccountBalances } from "@/lib/balances";
+import { deleteAccountDescendants, deleteReplyDescendants } from "@/lib/threads";
 import {
   getBlockDestination,
   getBlockInfo,
@@ -151,28 +152,41 @@ export async function processConfirmedBlock(blockHash: string, block: NanoBlockI
         return { status: "ignored" as const, reason: PaymentStatus.UNASSOCIATED };
       }
 
-      await tx.reply.upsert({
+      const existingReply = await tx.reply.findFirst({
         where: {
-          parentAccountId_nanoAddress: {
-            parentAccountId: request.replyToAccountId,
-            nanoAddress: sourceAddress,
-          },
-        },
-        update: {
-          message: request.pendingMessage,
-          showBalance: request.showBalance,
-          paymentHash: blockHash,
-          hiddenByModeration: false,
-          moderationReason: null,
-        },
-        create: {
           parentAccountId: request.replyToAccountId,
+          parentReplyId: null,
           nanoAddress: sourceAddress,
-          message: request.pendingMessage,
-          showBalance: request.showBalance,
-          paymentHash: blockHash,
         },
+        select: { id: true },
       });
+
+      const reply = existingReply
+        ? await tx.reply.update({
+            where: { id: existingReply.id },
+            data: {
+              message: request.pendingMessage,
+              showBalance: true,
+              paymentHash: blockHash,
+              hiddenByModeration: false,
+              moderationReason: null,
+            },
+          })
+        : await tx.reply.create({
+            data: {
+              parentAccountId: request.replyToAccountId,
+              parentReplyId: null,
+              level: 2,
+              nanoAddress: sourceAddress,
+              message: request.pendingMessage,
+              showBalance: true,
+              paymentHash: blockHash,
+            },
+          });
+
+      if (existingReply) {
+        await deleteReplyDescendants(tx, reply.id);
+      }
 
       await tx.publicationRequest.update({
         where: { id: request.id },
@@ -228,6 +242,10 @@ export async function processConfirmedBlock(blockHash: string, block: NanoBlockI
             showBalance: request.showBalance,
           },
         });
+
+    if (existingAccount) {
+      await deleteAccountDescendants(tx, account.id);
+    }
 
     await tx.messageHistory.updateMany({
       where: { verifiedAccountId: account.id, replacedAt: null },

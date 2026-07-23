@@ -5,7 +5,6 @@ import { LinkifiedMessage } from "@/components/LinkifiedMessage";
 
 type PaymentRequest = {
   id: string;
-  nanoAddress: string;
   receiverAddress: string;
   amountNano: string;
   amountRaw: string;
@@ -22,28 +21,28 @@ type RequestStatus = {
   completedAt: string | null;
   paymentHash: string | null;
   rank: number | null;
-  nanoAddress: string;
+  existingMessage: string;
+  published: boolean;
 };
 
 type RankingItem = {
   id: string;
   rank: number;
-  nanoAddress: string;
   message: string;
   updatedAt: string;
   publicUrl: string;
   balance: { raw: string; xno: string } | null;
-  balanceHidden: boolean;
+  directReplies: number;
+  threadLevels: number;
 };
 
 const RANKING_REFRESH_MS = 30000;
 
 export default function Home() {
-  const [nanoAddress, setNanoAddress] = useState("");
   const [message, setMessage] = useState("");
-  const [showBalance, setShowBalance] = useState(true);
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const [requestStatus, setRequestStatus] = useState<RequestStatus | null>(null);
+  const [paidRequestId, setPaidRequestId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const query = "";
@@ -56,7 +55,7 @@ export default function Home() {
   const remainingSeconds = useCountdown(paymentRequest?.expiresAt);
   const charsLeft = 300 - message.length;
 
-  async function submitPublication(replacePending = false) {
+  async function startPayment() {
     setError("");
     setLoading(true);
 
@@ -64,7 +63,7 @@ export default function Home() {
       const response = await fetch("/api/publication-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nanoAddress, message, showBalance, replacePending }),
+        body: JSON.stringify({}),
       });
       const data = await readJsonResponse<PaymentRequest & { error?: string }>(response);
 
@@ -74,6 +73,32 @@ export default function Home() {
 
       setPaymentRequest(data);
       setRequestStatus(null);
+      setPaidRequestId(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Error inesperado.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function publishPaidMessage() {
+    if (!paidRequestId) return;
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch(`/api/publication-requests/${paidRequestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const data = await readJsonResponse<{ error?: string }>(response);
+      if (!response.ok) throw new Error(data.error ?? "No se pudo publicar el mensaje.");
+      setPaidRequestId(null);
+      setPaymentRequest(null);
+      setRequestStatus(null);
+      setMessage("");
+      setRankingRefreshKey((current) => current + 1);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
     } finally {
@@ -161,16 +186,17 @@ export default function Home() {
 
       if (data.status === "COMPLETED") {
         clearInterval(interval);
+        setPaidRequestId(paymentRequest.id);
+        setMessage(data.existingMessage ?? "");
         setRankingRefreshKey((current) => current + 1);
         setPaymentRequest(null);
-        setRequestStatus(null);
       }
     }, 3000);
 
     return () => clearInterval(interval);
   }, [paymentRequest]);
 
-  const paymentCompleted = requestStatus?.status === "COMPLETED";
+  const editorReady = Boolean(paidRequestId);
 
   return (
     <main className="min-h-screen">
@@ -194,36 +220,43 @@ export default function Home() {
                   NanoVoices
                 </p>
                 <h1 className="text-3xl font-semibold text-[var(--nano-deep)] md:text-5xl">
-                  Más saldo, más visible
+                  Predominan las cuentas con más XNO
                 </h1>
               </div>
             </div>
+            <details className="mt-4 rounded border border-[var(--nano-line)] bg-[#fbfdff] p-4 text-sm leading-6 text-slate-700">
+              <summary className="cursor-pointer font-semibold text-[var(--nano-deep)]">
+                Guía rápida
+              </summary>
+              <p className="mt-3">
+                Para publicar o editar, primero paga 0,02 XNO. NanoVoices detecta la cuenta que hizo
+                el pago y abre el editor asociado a esa cuenta en el nivel actual.
+              </p>
+              <p className="mt-2">
+                Cada nivel ordena los mensajes por el saldo XNO de la cuenta. Al editar un mensaje,
+                se corta el hilo desde ese punto y se eliminan sus niveles superiores.
+              </p>
+            </details>
           </div>
 
           <div>
             <p className="mb-3 text-sm font-semibold text-slate-700">
-              Publica o actualiza un mensaje con 0,01 XNO.
+              Publica o actualiza un mensaje con 0,02 XNO.
             </p>
             <form
               className="rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-4 shadow-sm md:p-5"
               onSubmit={(event) => {
                 event.preventDefault();
-                submitPublication(false);
+                if (editorReady) {
+                  publishPaidMessage();
+                } else {
+                  startPayment();
+                }
               }}
             >
-            <label className="block text-sm font-semibold text-slate-800" htmlFor="nanoAddress">
-              Tu cuenta Nano
-            </label>
-            <input
-              id="nanoAddress"
-              className="focus-ring mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
-              value={nanoAddress}
-              onChange={(event) => setNanoAddress(event.target.value)}
-              placeholder="nano_..."
-              autoComplete="off"
-            />
-
-            <div className="mt-4 flex items-center justify-between gap-4">
+            {editorReady ? (
+              <>
+              <div className="flex items-center justify-between gap-4">
               <label className="block text-sm font-semibold text-slate-800" htmlFor="message">
                 Tu mensaje
               </label>
@@ -238,36 +271,12 @@ export default function Home() {
               maxLength={300}
               onChange={(event) => setMessage(event.target.value)}
             />
-
-            <fieldset className="mt-4 grid grid-cols-2 gap-2">
-              <legend className="sr-only">Visibilidad del saldo</legend>
-              <button
-                type="button"
-                className={`rounded-xl border px-3 py-3 text-sm font-semibold ${
-                  showBalance
-                    ? "border-[var(--nano-blue)] bg-blue-50 text-[var(--nano-deep)]"
-                    : "border-slate-300 bg-white text-slate-600"
-                }`}
-                onClick={() => setShowBalance(true)}
-              >
-                Mostrar mi saldo
-              </button>
-              <button
-                type="button"
-                className={`rounded-xl border px-3 py-3 text-sm font-semibold ${
-                  !showBalance
-                    ? "border-[var(--nano-blue)] bg-blue-50 text-[var(--nano-deep)]"
-                    : "border-slate-300 bg-white text-slate-600"
-                }`}
-                onClick={() => setShowBalance(false)}
-              >
-                Ocultar mi saldo
-              </button>
-            </fieldset>
-
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              Saldo oculto no es privacidad total: Nano es público y la posición puede dar pistas.
-            </p>
+              </>
+            ) : (
+              <p className="text-sm leading-6 text-slate-700">
+                Primero realiza el pago. Después de confirmar la cuenta pagadora, se abrirá el editor.
+              </p>
+            )}
 
             {error ? <p className="mt-4 text-sm font-medium text-red-700">{error}</p> : null}
 
@@ -275,7 +284,7 @@ export default function Home() {
               className="focus-ring mt-5 w-full rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               disabled={loading}
             >
-              {loading ? "Preparando..." : "Publicar o actualizar mensaje"}
+              {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Pagar para publicar"}
             </button>
             </form>
           </div>
@@ -287,8 +296,6 @@ export default function Home() {
           request={paymentRequest}
           status={requestStatus}
           remainingSeconds={remainingSeconds}
-          completed={paymentCompleted}
-          onReplacePending={() => submitPublication(true)}
           onCancel={cancelPaymentView}
         />
       ) : null}
@@ -296,7 +303,7 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-4 pb-8 pt-4 md:px-6 md:pt-5">
         <div className="mb-1">
           <div>
-            <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">Ranking</h2>
+            <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">Ranking de nivel 1</h2>
           </div>
         </div>
 
@@ -329,15 +336,11 @@ function PaymentPanel({
   request,
   status,
   remainingSeconds,
-  completed,
-  onReplacePending,
   onCancel,
 }: {
   request: PaymentRequest;
   status: RequestStatus | null;
   remainingSeconds: number;
-  completed: boolean;
-  onReplacePending: () => void;
   onCancel: () => void;
 }) {
   return (
@@ -350,12 +353,11 @@ function PaymentPanel({
         />
         <div>
           <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">
-            {completed ? "Publicación confirmada" : "Esperando el pago"}
+            Esperando el pago
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-700">
-            Envía desde la misma cuenta que escribiste.
+            Envía 0,02 XNO desde la cuenta que quieres asociar al mensaje.
           </p>
-          {!completed ? (
             <div className="mt-4 flex flex-wrap gap-2">
               <a
                 className="focus-ring inline-flex rounded-xl bg-[var(--nano-blue)] px-4 py-3 text-sm font-semibold text-white"
@@ -371,18 +373,6 @@ function PaymentPanel({
                 Cancelar
               </button>
             </div>
-          ) : null}
-          {request.reused && !completed ? (
-            <div className="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              Ya hay una solicitud pendiente para esta cuenta.
-              <button
-                className="focus-ring mt-3 block rounded bg-amber-900 px-3 py-2 text-sm font-semibold text-white"
-                onClick={onReplacePending}
-              >
-                Reemplazar solicitud pendiente
-              </button>
-            </div>
-          ) : null}
 
           <CopyRow label="Receptor" value={request.receiverAddress} />
           <CopyRow label="Monto" value={request.amountNano} />
@@ -391,22 +381,10 @@ function PaymentPanel({
             <p>
               Estado:{" "}
               <strong className="text-[var(--nano-deep)]">
-                {completed ? "Publicado" : status?.status ?? request.status}
+                {status?.status ?? request.status}
               </strong>
             </p>
             <p>Temporizador: {formatRemaining(remainingSeconds)}</p>
-            {completed ? (
-              <>
-                <p>Cuenta: {status?.nanoAddress}</p>
-                <p>Posición: #{status?.rank ?? "calculando"}</p>
-                <button
-                  className="focus-ring mt-2 w-fit rounded bg-[var(--nano-deep)] px-4 py-2 text-sm font-semibold text-white"
-                  onClick={() => document.querySelector("#ranking-card")?.scrollIntoView()}
-                >
-                  Ver ranking
-                </button>
-              </>
-            ) : null}
           </div>
         </div>
       </div>
@@ -452,18 +430,11 @@ function RankingCard({ item }: { item: RankingItem }) {
               #{item.rank}
             </div>
             <div className="max-w-20 rounded-2xl border border-[var(--nano-line)] bg-white px-2 py-1.5 text-center font-semibold leading-tight text-[var(--nano-deep)]">
-              {item.balanceHidden ? (
-                <span className="block text-[11px]">Saldo oculto</span>
-              ) : (
-                <>
-                  <span className="block text-sm">{formatRoundedXno(item.balance?.xno ?? "0")}</span>
-                  <span className="block text-[10px] uppercase tracking-[0.08em] text-slate-500">XNO</span>
-                </>
-              )}
+              <span className="block text-sm">{formatRoundedXno(item.balance?.xno ?? "0")}</span>
+              <span className="block text-[10px] uppercase tracking-[0.08em] text-slate-500">XNO</span>
             </div>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="break-all font-mono text-xs text-slate-500">{item.nanoAddress}</p>
             <div className="relative mt-3 rounded-xl border-2 border-blue-200 bg-[#f7fbff] px-4 py-3 shadow-[0_10px_28px_rgba(32,116,205,0.08)]">
               <span className="absolute -left-[9px] top-4 h-4 w-4 rotate-45 border-b-2 border-l-2 border-blue-200 bg-[#f7fbff]" />
               <LinkifiedMessage
@@ -477,11 +448,14 @@ function RankingCard({ item }: { item: RankingItem }) {
           <p className="mt-1 text-sm text-slate-500">
             Actualizado {new Date(item.updatedAt).toLocaleDateString("es")}
           </p>
+          <p className="mt-1 text-sm text-slate-500">
+            {item.directReplies} respuestas · {item.threadLevels} niveles
+          </p>
           <a
             className="focus-ring mt-3 inline-flex rounded-xl border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]"
             href={item.publicUrl}
           >
-            Responder
+            Abrir hilo
           </a>
         </div>
       </div>

@@ -1,5 +1,5 @@
 export const RAW_PER_XNO = 10n ** 30n;
-export const REQUIRED_PAYMENT_RAW = 10n ** 28n;
+export const REQUIRED_PAYMENT_RAW = 2n * 10n ** 28n;
 
 export function rawToXno(raw: string) {
   if (!/^\d+$/.test(raw)) {

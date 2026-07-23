@@ -9,16 +9,12 @@ import {
   publicAppUrl,
   requiredReceiverAddress,
 } from "@/lib/env";
-import { normalizeNanoAddress, isValidNanoAddress } from "@/lib/nano/address";
 import { prisma } from "@/lib/prisma";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
-import { sanitizeMessage } from "@/lib/sanitize";
+import { resolveThreadContext } from "@/lib/threads";
 
 const publicationSchema = z.object({
-  nanoAddress: z.string().min(1),
-  message: z.string().min(1).max(300),
-  showBalance: z.boolean(),
-  replacePending: z.boolean().optional(),
+  parentId: z.string().min(1).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -32,61 +28,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Datos inválidos." }, { status: 400 });
     }
 
-    const nanoAddress = normalizeNanoAddress(parsed.data.nanoAddress);
-    const pendingMessage = sanitizeMessage(parsed.data.message);
-
-    if (!isValidNanoAddress(nanoAddress)) {
-      return NextResponse.json({ error: "La cuenta Nano no es válida." }, { status: 400 });
-    }
-
-    if (!pendingMessage) {
-      return NextResponse.json({ error: "El mensaje no puede estar vacío." }, { status: 400 });
-    }
-
     const now = new Date();
     const expiresAt = new Date(now.getTime() + REQUEST_EXPIRATION_MINUTES * 60_000);
 
     const result = await prisma.$transaction(async (tx) => {
+      const context = await resolveThreadContext(tx, parsed.data.parentId);
+      if (!context) {
+        return { error: "El hilo no existe o ya llegó al nivel máximo." as const };
+      }
+
       await tx.publicationRequest.updateMany({
         where: {
-          nanoAddress,
+          nanoAddress: "",
           status: PublicationRequestStatus.PENDING,
           expiresAt: { lt: now },
         },
         data: { status: PublicationRequestStatus.EXPIRED },
       });
 
-      const active = await tx.publicationRequest.findFirst({
-        where: {
-          nanoAddress,
-          status: PublicationRequestStatus.PENDING,
-          expiresAt: { gte: now },
-        },
-        orderBy: { createdAt: "desc" },
-      });
-
-      if (active && !parsed.data.replacePending) {
-        return { request: active, reused: true };
-      }
-
-      if (active) {
-        await tx.publicationRequest.update({
-          where: { id: active.id },
-          data: { status: PublicationRequestStatus.REPLACED },
-        });
-      }
-
       const created = await tx.publicationRequest.create({
         data: {
-          nanoAddress,
-          pendingMessage,
-          showBalance: parsed.data.showBalance,
+          nanoAddress: "",
+          pendingMessage: "",
+          showBalance: true,
           expiresAt,
+          replyToAccountId: context.kind === "account" ? context.parentAccountId : null,
+          replyToReplyId: context.kind === "reply" ? context.parentReplyId : null,
         },
       });
 
-      return { request: created, reused: false };
+      return { request: created, reused: false, level: context.level };
     });
+
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: 404 });
+    }
 
     const receiverAddress = requiredReceiverAddress();
     const paymentUri = `nano:${receiverAddress}?amount=${REQUIRED_PAYMENT_RAW}&label=NanoVoices`;
@@ -98,13 +74,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       id: result.request.id,
-      nanoAddress: result.request.nanoAddress,
       receiverAddress,
       amountNano: REQUIRED_PAYMENT_NANO,
       amountRaw: REQUIRED_PAYMENT_RAW,
       expiresAt: result.request.expiresAt.toISOString(),
       status: result.request.status,
       reused: result.reused,
+      level: result.level,
       paymentUri,
       qrCodeDataUrl,
       statusUrl: `${publicAppUrl()}/api/publication-requests/${result.request.id}`,
