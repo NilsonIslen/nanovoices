@@ -199,8 +199,11 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
 
   return (
     <section className="mx-auto mt-4 max-w-3xl">
+      <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">
+        Ranking de nivel {nextLevel}
+      </h2>
       <form
-        className="rounded-2xl border border-[var(--nano-line)] bg-white p-3 shadow-sm md:p-4"
+        className="mt-2 rounded-2xl border border-[var(--nano-line)] bg-white p-3 shadow-sm md:p-4"
         onSubmit={(event) => {
           event.preventDefault();
           if (editorReady) {
@@ -287,11 +290,8 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
         </div>
       ) : null}
 
-      <div className="mt-5">
-        <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">
-          Ranking de nivel {nextLevel}
-        </h2>
-        <div className="mt-2 grid gap-3">
+      <div className="mt-3">
+        <div className="grid gap-3">
           {replies.map((reply) => (
             <ReplyCard key={reply.id} reply={reply} />
           ))}
