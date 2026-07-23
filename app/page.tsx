@@ -262,7 +262,7 @@ export default function Home() {
 
             <div className={editorReady || error ? "mt-3" : ""}>
               <p className="mb-1 text-sm font-semibold text-slate-700">
-                Crea o edita el mensaje de el nivel actual por 0,02 XNO.
+                Crea o edita tu mensaje en el nivel actual por 0,02 XNO.
               </p>
               <button
                 className="focus-ring w-full rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
