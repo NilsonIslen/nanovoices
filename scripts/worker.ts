@@ -33,8 +33,10 @@ async function main() {
     );
   }, BALANCE_REFRESH_SECONDS * 1000);
 
-  await recoverRecentPayments();
-  await refreshVerifiedAccountBalances();
+  await recoverRecentPayments().catch((error) => console.error("Fallo en recuperación RPC inicial", error));
+  await refreshVerifiedAccountBalances().catch((error) =>
+    console.error("Fallo inicial actualizando saldos", error),
+  );
 }
 
 function connectWebSocket() {
