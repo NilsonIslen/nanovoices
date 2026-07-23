@@ -227,11 +227,8 @@ export default function Home() {
           </div>
 
           <div>
-            <p className="mb-3 text-sm font-semibold text-slate-700">
-              Crea o edita el mensaje de el nivel actual por 0,02 XNO.
-            </p>
             <form
-              className="rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-4 shadow-sm md:p-5"
+              className="rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-3 shadow-sm md:p-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 if (editorReady) {
@@ -263,12 +260,17 @@ export default function Home() {
 
             {error ? <p className="mt-4 text-sm font-medium text-red-700">{error}</p> : null}
 
-            <button
-              className="focus-ring mt-5 w-full rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={loading}
-            >
-              {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Crear o editar mensaje"}
-            </button>
+            <div className={editorReady || error ? "mt-3" : ""}>
+              <p className="mb-1 text-sm font-semibold text-slate-700">
+                Crea o edita el mensaje de el nivel actual por 0,02 XNO.
+              </p>
+              <button
+                className="focus-ring w-full rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={loading}
+              >
+                {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Crear o editar mensaje"}
+              </button>
+            </div>
             </form>
           </div>
         </div>
