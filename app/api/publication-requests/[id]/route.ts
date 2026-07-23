@@ -12,6 +12,7 @@ import { sanitizeMessage } from "@/lib/sanitize";
 import { deleteAccountDescendants, deleteReplyDescendants } from "@/lib/threads";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
+const PAYMENT_CLAIM_GRACE_MS = 15 * 60_000;
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -220,9 +221,12 @@ async function claimPaymentIfAvailable(id: string) {
         status: PaymentStatus.UNASSOCIATED,
         destinationAddress: requiredReceiverAddress(),
         amountRaw: REQUIRED_PAYMENT_RAW,
-        confirmedAt: { gte: publicationRequest.createdAt },
+        detectedAt: {
+          gte: new Date(publicationRequest.createdAt.getTime() - PAYMENT_CLAIM_GRACE_MS),
+          lte: publicationRequest.expiresAt,
+        },
       },
-      orderBy: { confirmedAt: "asc" },
+      orderBy: { detectedAt: "asc" },
     });
 
     if (!payment) return publicationRequest;

@@ -358,7 +358,6 @@ function PaymentPanel({
             </div>
 
           <CopyRow label="Receptor" value={request.receiverAddress} />
-          <CopyRow label="Monto" value={request.amountNano} />
 
           <div className="mt-4 grid gap-2 text-sm text-slate-700">
             <p>
