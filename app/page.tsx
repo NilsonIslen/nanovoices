@@ -216,32 +216,19 @@ export default function Home() {
                 </div>
               </div>
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--nano-blue)]">
+                <p className="text-2xl font-semibold uppercase tracking-[0.12em] text-[var(--nano-blue)] md:text-4xl">
                   NanoVoices
                 </p>
-                <h1 className="text-3xl font-semibold text-[var(--nano-deep)] md:text-5xl">
+                <h1 className="mt-1 whitespace-nowrap text-sm font-semibold text-[var(--nano-deep)] md:text-base">
                   Predominan las cuentas con más XNO
                 </h1>
               </div>
             </div>
-            <details className="mt-4 rounded border border-[var(--nano-line)] bg-[#fbfdff] p-4 text-sm leading-6 text-slate-700">
-              <summary className="cursor-pointer font-semibold text-[var(--nano-deep)]">
-                Guía rápida
-              </summary>
-              <p className="mt-3">
-                Para publicar o editar, primero paga 0,02 XNO. NanoVoices detecta la cuenta que hizo
-                el pago y abre el editor asociado a esa cuenta en el nivel actual.
-              </p>
-              <p className="mt-2">
-                Cada nivel ordena los mensajes por el saldo XNO de la cuenta. Al editar un mensaje,
-                se corta el hilo desde ese punto y se eliminan sus niveles superiores.
-              </p>
-            </details>
           </div>
 
           <div>
             <p className="mb-3 text-sm font-semibold text-slate-700">
-              Publica o actualiza un mensaje con 0,02 XNO.
+              Crea o edita el mensaje de el nivel actual por 0,02 XNO.
             </p>
             <form
               className="rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-4 shadow-sm md:p-5"
@@ -272,11 +259,7 @@ export default function Home() {
               onChange={(event) => setMessage(event.target.value)}
             />
               </>
-            ) : (
-              <p className="text-sm leading-6 text-slate-700">
-                Primero realiza el pago. Después de confirmar la cuenta pagadora, se abrirá el editor.
-              </p>
-            )}
+            ) : null}
 
             {error ? <p className="mt-4 text-sm font-medium text-red-700">{error}</p> : null}
 
@@ -284,7 +267,7 @@ export default function Home() {
               className="focus-ring mt-5 w-full rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               disabled={loading}
             >
-              {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Pagar para publicar"}
+              {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Crear o editar mensaje"}
             </button>
             </form>
           </div>

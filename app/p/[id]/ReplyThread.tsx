@@ -154,7 +154,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
         }}
       >
         <p className="mb-3 text-sm font-semibold text-slate-700">
-          Publicar en el nivel {nextLevel} cuesta 0,02 XNO.
+          Crea o edita el mensaje de el nivel actual por 0,02 XNO.
         </p>
 
         {editorReady ? (
@@ -175,11 +175,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
               onChange={(event) => setMessage(event.target.value)}
             />
           </>
-        ) : (
-          <p className="text-sm leading-6 text-slate-700">
-            Primero realiza el pago. Después se abrirá el editor para la cuenta detectada.
-          </p>
-        )}
+        ) : null}
 
         {error ? <p className="mt-4 text-sm font-medium text-red-700">{error}</p> : null}
 
@@ -187,7 +183,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
           className="focus-ring mt-5 w-full rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           disabled={loading}
         >
-          {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Pagar para publicar"}
+          {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Crear o editar mensaje"}
         </button>
       </form>
 
