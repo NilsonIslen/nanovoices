@@ -46,7 +46,7 @@ npm run worker
 - `REQUIRED_PAYMENT_RAW`: debe ser `10000000000000000000000000000`.
 - `NANO_EXPLORER_ACCOUNT_URL`: plantilla con `{address}`.
 - `PUBLIC_APP_URL`: URL pública, por ejemplo `https://nanovoices.com`.
-- `BALANCE_REFRESH_SECONDS`: intervalo de actualización de saldos.
+- `BALANCE_REFRESH_SECONDS`: intervalo de actualización de saldos. Recomendado: `60`.
 - `REQUEST_EXPIRATION_MINUTES`: vencimiento inicial de solicitudes, por defecto 15.
 - `PAYMENT_RECOVERY_INTERVAL_SECONDS`: frecuencia del recuperador RPC.
 - `PAYMENT_RECOVERY_HISTORY_COUNT`: ventana de historial revisada en la cuenta receptora.

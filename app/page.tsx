@@ -35,6 +35,8 @@ type RankingItem = {
   balanceHidden: boolean;
 };
 
+const RANKING_REFRESH_MS = 30000;
+
 export default function Home() {
   const [nanoAddress, setNanoAddress] = useState("");
   const [message, setMessage] = useState("");
@@ -138,6 +140,14 @@ export default function Home() {
       cancelled = true;
     };
   }, [query, rankingRefreshKey]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRankingRefreshKey((current) => current + 1);
+    }, RANKING_REFRESH_MS);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!paymentRequest) return;
