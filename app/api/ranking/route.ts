@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { explorerAccountUrl } from "@/lib/env";
 import { rawToXno } from "@/lib/nano/amount";
 import { prisma } from "@/lib/prisma";
 
@@ -46,8 +45,7 @@ export async function GET(request: NextRequest) {
         message: account.currentMessage,
         updatedAt: account.updatedAt.toISOString(),
         verifiedAt: account.verifiedAt.toISOString(),
-        explorerUrl: explorerAccountUrl(account.nanoAddress),
-        publicUrl: `${request.nextUrl.origin}/p/${account.id}`,
+        publicUrl: `/p/${account.id}`,
         balance: account.showBalance
           ? {
               raw: account.cachedBalanceRaw,
