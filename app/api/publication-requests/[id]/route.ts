@@ -206,16 +206,14 @@ async function claimPaymentIfAvailable(id: string) {
     const publicationRequest = await tx.publicationRequest.findUnique({ where: { id } });
 
     if (!publicationRequest) return null;
-    if (publicationRequest.status !== PublicationRequestStatus.PENDING) return publicationRequest;
-
-    const now = new Date();
-    if (publicationRequest.expiresAt < now) {
-      return tx.publicationRequest.update({
-        where: { id },
-        data: { status: PublicationRequestStatus.EXPIRED },
-      });
+    if (
+      publicationRequest.status !== PublicationRequestStatus.PENDING &&
+      !(publicationRequest.status === PublicationRequestStatus.EXPIRED && !publicationRequest.paymentHash)
+    ) {
+      return publicationRequest;
     }
 
+    const now = new Date();
     const payment = await tx.payment.findFirst({
       where: {
         status: PaymentStatus.UNASSOCIATED,
@@ -223,13 +221,24 @@ async function claimPaymentIfAvailable(id: string) {
         amountRaw: REQUIRED_PAYMENT_RAW,
         detectedAt: {
           gte: new Date(publicationRequest.createdAt.getTime() - PAYMENT_CLAIM_GRACE_MS),
-          lte: publicationRequest.expiresAt,
         },
       },
       orderBy: { detectedAt: "asc" },
     });
 
-    if (!payment) return publicationRequest;
+    if (!payment) {
+      if (
+        publicationRequest.status === PublicationRequestStatus.PENDING &&
+        publicationRequest.expiresAt.getTime() + PAYMENT_CLAIM_GRACE_MS < now.getTime()
+      ) {
+        return tx.publicationRequest.update({
+          where: { id },
+          data: { status: PublicationRequestStatus.EXPIRED },
+        });
+      }
+
+      return publicationRequest;
+    }
 
     await tx.payment.update({
       where: { id: payment.id },

@@ -25,6 +25,11 @@ type RequestStatus = {
   published: boolean;
 };
 
+type StoredPaymentRequest = {
+  request: PaymentRequest;
+  paidRequestId: string | null;
+};
+
 type RankingItem = {
   id: string;
   rank: number;
@@ -37,6 +42,7 @@ type RankingItem = {
 };
 
 const RANKING_REFRESH_MS = 30000;
+const PAYMENT_STORAGE_KEY = "nanovoices:publication-request";
 
 export default function Home() {
   const [message, setMessage] = useState("");
@@ -74,6 +80,7 @@ export default function Home() {
       setPaymentRequest(data);
       setRequestStatus(null);
       setPaidRequestId(null);
+      rememberPaymentRequest(data, null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
     } finally {
@@ -97,6 +104,7 @@ export default function Home() {
       setPaidRequestId(null);
       setPaymentRequest(null);
       setRequestStatus(null);
+      forgetPaymentRequest();
       setMessage("");
       setRankingRefreshKey((current) => current + 1);
     } catch (caught) {
@@ -128,6 +136,54 @@ export default function Home() {
     setRequestStatus(null);
     setError("");
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    const stored = readStoredPaymentRequest();
+    if (!stored) return;
+    const activeStored = stored;
+
+    async function resumeStoredRequest() {
+      const response = await fetch(`/api/publication-requests/${activeStored.request.id}`);
+      const data = await readJsonResponse<RequestStatus & { error?: string }>(response);
+      if (cancelled) return;
+
+      if (!response.ok) {
+        forgetPaymentRequest();
+        return;
+      }
+
+      setRequestStatus(data);
+
+      if (data.status === "COMPLETED") {
+        setPaidRequestId(activeStored.request.id);
+        setMessage(data.existingMessage ?? "");
+        rememberPaymentRequest(activeStored.request, activeStored.request.id);
+        return;
+      }
+
+      if (data.status === "PENDING") {
+        setPaymentRequest(activeStored.request);
+        setPaidRequestId(null);
+        rememberPaymentRequest(activeStored.request, null);
+        return;
+      }
+
+      if (data.status === "EXPIRED") {
+        setPaymentRequest(activeStored.request);
+        setPaidRequestId(null);
+        return;
+      }
+
+      forgetPaymentRequest();
+    }
+
+    resumeStoredRequest().catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +246,7 @@ export default function Home() {
         setMessage(data.existingMessage ?? "");
         setRankingRefreshKey((current) => current + 1);
         setPaymentRequest(null);
+        rememberPaymentRequest(paymentRequest, paymentRequest.id);
       }
     }, 3000);
 
@@ -315,6 +372,29 @@ export default function Home() {
       </section>
     </main>
   );
+}
+
+function readStoredPaymentRequest() {
+  try {
+    const raw = window.localStorage.getItem(PAYMENT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredPaymentRequest>;
+    if (!parsed.request?.id) return null;
+    return parsed as StoredPaymentRequest;
+  } catch {
+    return null;
+  }
+}
+
+function rememberPaymentRequest(request: PaymentRequest, paidRequestId: string | null) {
+  window.localStorage.setItem(
+    PAYMENT_STORAGE_KEY,
+    JSON.stringify({ request, paidRequestId } satisfies StoredPaymentRequest),
+  );
+}
+
+function forgetPaymentRequest() {
+  window.localStorage.removeItem(PAYMENT_STORAGE_KEY);
 }
 
 function PaymentPanel({

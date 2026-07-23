@@ -29,6 +29,11 @@ type RequestStatus = {
   existingMessage: string;
 };
 
+type StoredPaymentRequest = {
+  request: PaymentRequest;
+  paidRequestId: string | null;
+};
+
 const REFRESH_MS = 30000;
 
 export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLevel: number }) {
@@ -43,6 +48,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
   const charsLeft = 300 - message.length;
   const remainingSeconds = useCountdown(paymentRequest?.expiresAt);
   const editorReady = Boolean(paidRequestId);
+  const paymentStorageKey = `nanovoices:reply-request:${parentId}`;
 
   async function startPayment() {
     setError("");
@@ -63,6 +69,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
       setPaymentRequest(data);
       setPaidRequestId(null);
       setRequestStatus(null);
+      rememberPaymentRequest(paymentStorageKey, data, null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
     } finally {
@@ -87,6 +94,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
       setPaidRequestId(null);
       setPaymentRequest(null);
       setRequestStatus(null);
+      forgetPaymentRequest(paymentStorageKey);
       setRefreshKey((current) => current + 1);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
@@ -121,6 +129,54 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const stored = readStoredPaymentRequest(paymentStorageKey);
+    if (!stored) return;
+    const activeStored = stored;
+
+    async function resumeStoredRequest() {
+      const response = await fetch(`/api/publication-requests/${activeStored.request.id}`);
+      const data = await readJsonResponse<RequestStatus & { error?: string }>(response);
+      if (cancelled) return;
+
+      if (!response.ok) {
+        forgetPaymentRequest(paymentStorageKey);
+        return;
+      }
+
+      setRequestStatus(data);
+
+      if (data.status === "COMPLETED") {
+        setPaidRequestId(activeStored.request.id);
+        setMessage(data.existingMessage ?? "");
+        rememberPaymentRequest(paymentStorageKey, activeStored.request, activeStored.request.id);
+        return;
+      }
+
+      if (data.status === "PENDING") {
+        setPaymentRequest(activeStored.request);
+        setPaidRequestId(null);
+        rememberPaymentRequest(paymentStorageKey, activeStored.request, null);
+        return;
+      }
+
+      if (data.status === "EXPIRED") {
+        setPaymentRequest(activeStored.request);
+        setPaidRequestId(null);
+        return;
+      }
+
+      forgetPaymentRequest(paymentStorageKey);
+    }
+
+    resumeStoredRequest().catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [paymentStorageKey]);
+
+  useEffect(() => {
     if (!paymentRequest) return;
 
     const interval = setInterval(async () => {
@@ -134,11 +190,12 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
         setPaidRequestId(paymentRequest.id);
         setMessage(data.existingMessage ?? "");
         setPaymentRequest(null);
+        rememberPaymentRequest(paymentStorageKey, paymentRequest, paymentRequest.id);
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [paymentRequest]);
+  }, [paymentRequest, paymentStorageKey]);
 
   return (
     <section className="mx-auto mt-4 max-w-3xl">
@@ -247,6 +304,33 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
       </div>
     </section>
   );
+}
+
+function readStoredPaymentRequest(storageKey: string) {
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredPaymentRequest>;
+    if (!parsed.request?.id) return null;
+    return parsed as StoredPaymentRequest;
+  } catch {
+    return null;
+  }
+}
+
+function rememberPaymentRequest(
+  storageKey: string,
+  request: PaymentRequest,
+  paidRequestId: string | null,
+) {
+  window.localStorage.setItem(
+    storageKey,
+    JSON.stringify({ request, paidRequestId } satisfies StoredPaymentRequest),
+  );
+}
+
+function forgetPaymentRequest(storageKey: string) {
+  window.localStorage.removeItem(storageKey);
 }
 
 function ReplyCard({ reply }: { reply: ReplyItem }) {

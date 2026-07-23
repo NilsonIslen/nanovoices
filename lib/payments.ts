@@ -1,13 +1,6 @@
-import {
-  OperationType,
-  PaymentStatus,
-  PublicationRequestStatus,
-  type Prisma,
-} from "@prisma/client";
+import { PaymentStatus, type Prisma } from "@prisma/client";
 import { REQUIRED_PAYMENT_RAW, requiredReceiverAddress } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
-import { refreshVerifiedAccountBalances } from "@/lib/balances";
-import { deleteAccountDescendants, deleteReplyDescendants } from "@/lib/threads";
 import {
   getBlockDestination,
   getBlockInfo,
@@ -17,10 +10,8 @@ import {
   type NanoBlockInfo,
 } from "@/lib/nano/rpc";
 
-const LATE_CONFIRMATION_GRACE_MS = 60_000;
-
 export type ProcessPaymentResult =
-  | { status: "processed"; requestId: string; operationType: OperationType }
+  | { status: "processed"; requestId?: string }
   | { status: "ignored"; reason: PaymentStatus | "DUPLICATE" };
 
 export async function processPaymentHash(blockHash: string): Promise<ProcessPaymentResult> {
@@ -99,201 +90,14 @@ export async function processConfirmedBlock(blockHash: string, block: NanoBlockI
     });
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const existingPayment = await tx.payment.findUnique({ where: { blockHash } });
-    if (existingPayment) {
-      return { status: "ignored" as const, reason: "DUPLICATE" as const };
-    }
-
-    const request = await tx.publicationRequest.findFirst({
-      where: {
-        nanoAddress: sourceAddress,
-        status: PublicationRequestStatus.PENDING,
-        expiresAt: { gte: new Date(now.getTime() - LATE_CONFIRMATION_GRACE_MS) },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (!request) {
-      await tx.payment.create({
-        data: {
-          blockHash,
-          sourceAddress,
-          destinationAddress,
-          amountRaw,
-          confirmedAt,
-          status: PaymentStatus.UNASSOCIATED,
-          notes: "No existe solicitud pendiente compatible",
-        },
-      });
-
-      return { status: "ignored" as const, reason: PaymentStatus.UNASSOCIATED };
-    }
-
-    if (request.replyToAccountId) {
-      const parent = await tx.verifiedAccount.findFirst({
-        where: { id: request.replyToAccountId, hiddenByModeration: false },
-        select: { id: true },
-      });
-
-      if (!parent) {
-        await tx.payment.create({
-          data: {
-            blockHash,
-            sourceAddress,
-            destinationAddress,
-            amountRaw,
-            confirmedAt,
-            status: PaymentStatus.UNASSOCIATED,
-            notes: "La publicación respondida no existe o está oculta",
-          },
-        });
-
-        return { status: "ignored" as const, reason: PaymentStatus.UNASSOCIATED };
-      }
-
-      const existingReply = await tx.reply.findFirst({
-        where: {
-          parentAccountId: request.replyToAccountId,
-          parentReplyId: null,
-          nanoAddress: sourceAddress,
-        },
-        select: { id: true },
-      });
-
-      const reply = existingReply
-        ? await tx.reply.update({
-            where: { id: existingReply.id },
-            data: {
-              message: request.pendingMessage,
-              showBalance: true,
-              paymentHash: blockHash,
-              hiddenByModeration: false,
-              moderationReason: null,
-            },
-          })
-        : await tx.reply.create({
-            data: {
-              parentAccountId: request.replyToAccountId,
-              parentReplyId: null,
-              level: 2,
-              nanoAddress: sourceAddress,
-              message: request.pendingMessage,
-              showBalance: true,
-              paymentHash: blockHash,
-            },
-          });
-
-      if (existingReply) {
-        await deleteReplyDescendants(tx, reply.id);
-      }
-
-      await tx.publicationRequest.update({
-        where: { id: request.id },
-        data: {
-          status: PublicationRequestStatus.COMPLETED,
-          completedAt: now,
-          paymentHash: blockHash,
-        },
-      });
-
-      await tx.payment.create({
-        data: {
-          blockHash,
-          sourceAddress,
-          destinationAddress,
-          amountRaw,
-          confirmedAt,
-          requestId: request.id,
-          status: PaymentStatus.PROCESSED,
-          operationType: OperationType.REPLY,
-        },
-      });
-
-      return {
-        status: "processed" as const,
-        requestId: request.id,
-        operationType: OperationType.REPLY,
-      };
-    }
-
-    const existingAccount = await tx.verifiedAccount.findUnique({
-      where: { nanoAddress: sourceAddress },
-      select: { id: true },
-    });
-    const operationType = existingAccount
-      ? OperationType.UPDATE
-      : OperationType.INITIAL_PUBLICATION;
-
-    const account = existingAccount
-      ? await tx.verifiedAccount.update({
-          where: { id: existingAccount.id },
-          data: {
-            currentMessage: request.pendingMessage,
-            showBalance: request.showBalance,
-            hiddenByModeration: false,
-            moderationReason: null,
-          },
-        })
-      : await tx.verifiedAccount.create({
-          data: {
-            nanoAddress: sourceAddress,
-            currentMessage: request.pendingMessage,
-            showBalance: request.showBalance,
-          },
-        });
-
-    if (existingAccount) {
-      await deleteAccountDescendants(tx, account.id);
-    }
-
-    await tx.messageHistory.updateMany({
-      where: { verifiedAccountId: account.id, replacedAt: null },
-      data: { replacedAt: now },
-    });
-
-    await tx.messageHistory.create({
-      data: {
-        verifiedAccountId: account.id,
-        message: request.pendingMessage,
-        showBalance: request.showBalance,
-        paymentHash: blockHash,
-        publishedAt: now,
-      },
-    });
-
-    await tx.publicationRequest.update({
-      where: { id: request.id },
-      data: {
-        status: PublicationRequestStatus.COMPLETED,
-        completedAt: now,
-        paymentHash: blockHash,
-      },
-    });
-
-    await tx.payment.create({
-      data: {
-        blockHash,
-        sourceAddress,
-        destinationAddress,
-        amountRaw,
-        confirmedAt,
-        requestId: request.id,
-        status: PaymentStatus.PROCESSED,
-        operationType,
-      },
-    });
-
-    return { status: "processed" as const, requestId: request.id, operationType };
+  return saveUnassociated(blockHash, {
+    sourceAddress,
+    destinationAddress,
+    amountRaw,
+    confirmedAt,
+    status: PaymentStatus.UNASSOCIATED,
+    notes: "Pago confirmado pendiente de reclamar por una solicitud",
   });
-
-  if (result.status === "processed") {
-    await refreshVerifiedAccountBalances([sourceAddress]).catch((error) => {
-      console.error("No se pudo actualizar el saldo tras publicar", error);
-    });
-  }
-
-  return result;
 }
 
 export function validatePaymentBlock(block: NanoBlockInfo, receiverAddress: string) {

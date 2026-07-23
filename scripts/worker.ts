@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 
 let ws: WebSocket | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
+const PAYMENT_REQUEST_EXPIRATION_GRACE_MS = 15 * 60_000;
 
 async function main() {
   await confirmRequiredAmountWithNode();
@@ -120,7 +121,7 @@ async function recoverRecentPayments() {
   await prisma.publicationRequest.updateMany({
     where: {
       status: "PENDING",
-      expiresAt: { lt: new Date() },
+      expiresAt: { lt: new Date(Date.now() - PAYMENT_REQUEST_EXPIRATION_GRACE_MS) },
     },
     data: { status: "EXPIRED" },
   });
