@@ -86,8 +86,11 @@ El RPC puede vivir detrás de red privada, túnel o proxy autenticado. No debe p
 5. Cada hash se verifica por RPC.
 6. El bloque debe ser `send`, confirmado, hacia la cuenta receptora, desde la dirección indicada y por el raw exacto.
 7. Dentro de una transacción se registra `Payment`, se completa `PublicationRequest`, se crea/actualiza `VerifiedAccount` y se guarda `MessageHistory`.
+8. Si la solicitud es una respuesta, se crea o reemplaza una `Reply` dentro del subranking del mensaje respondido.
 
 Si el pago no coincide con una solicitud pendiente, se guarda como no asociado y no publica nada.
+
+Cada mensaje principal tiene una URL permanente con su propio subranking de respuestas. Responder cuesta también `0,01 XNO`, usa la misma cuenta receptora oficial y exige que el pago salga desde la cuenta Nano escrita en el formulario de respuesta. Las respuestas se ordenan por saldo confirmado de la cuenta que responde.
 
 ## Recuperación Después de Reinicios
 
@@ -95,7 +98,7 @@ El worker revisa periódicamente `receivable` y `account_history` de la cuenta r
 
 ## Ranking y Saldos
 
-Solo se consultan direcciones verificadas. No se recorre el ledger. El ranking se ordena por `cachedBalanceRaw` descendente y, en empate, por la verificación más antigua. Si una cuenta oculta el saldo, la API pública no envía el saldo exacto.
+Solo se consultan direcciones registradas en NanoVoices. No se recorre el ledger. El ranking principal se ordena por `cachedBalanceRaw` descendente y, en empate, por la verificación más antigua. Los subrankings de respuestas se ordenan por saldo confirmado descendente y, en empate, por la respuesta más antigua. Si una cuenta oculta el saldo, la API pública no envía el saldo exacto.
 
 ## Administración
 

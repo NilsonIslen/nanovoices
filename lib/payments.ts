@@ -129,6 +129,80 @@ export async function processConfirmedBlock(blockHash: string, block: NanoBlockI
       return { status: "ignored" as const, reason: PaymentStatus.UNASSOCIATED };
     }
 
+    if (request.replyToAccountId) {
+      const parent = await tx.verifiedAccount.findFirst({
+        where: { id: request.replyToAccountId, hiddenByModeration: false },
+        select: { id: true },
+      });
+
+      if (!parent) {
+        await tx.payment.create({
+          data: {
+            blockHash,
+            sourceAddress,
+            destinationAddress,
+            amountRaw,
+            confirmedAt,
+            status: PaymentStatus.UNASSOCIATED,
+            notes: "La publicación respondida no existe o está oculta",
+          },
+        });
+
+        return { status: "ignored" as const, reason: PaymentStatus.UNASSOCIATED };
+      }
+
+      await tx.reply.upsert({
+        where: {
+          parentAccountId_nanoAddress: {
+            parentAccountId: request.replyToAccountId,
+            nanoAddress: sourceAddress,
+          },
+        },
+        update: {
+          message: request.pendingMessage,
+          showBalance: request.showBalance,
+          paymentHash: blockHash,
+          hiddenByModeration: false,
+          moderationReason: null,
+        },
+        create: {
+          parentAccountId: request.replyToAccountId,
+          nanoAddress: sourceAddress,
+          message: request.pendingMessage,
+          showBalance: request.showBalance,
+          paymentHash: blockHash,
+        },
+      });
+
+      await tx.publicationRequest.update({
+        where: { id: request.id },
+        data: {
+          status: PublicationRequestStatus.COMPLETED,
+          completedAt: now,
+          paymentHash: blockHash,
+        },
+      });
+
+      await tx.payment.create({
+        data: {
+          blockHash,
+          sourceAddress,
+          destinationAddress,
+          amountRaw,
+          confirmedAt,
+          requestId: request.id,
+          status: PaymentStatus.PROCESSED,
+          operationType: OperationType.REPLY,
+        },
+      });
+
+      return {
+        status: "processed" as const,
+        requestId: request.id,
+        operationType: OperationType.REPLY,
+      };
+    }
+
     const existingAccount = await tx.verifiedAccount.findUnique({
       where: { nanoAddress: sourceAddress },
       select: { id: true },

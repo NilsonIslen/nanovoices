@@ -20,6 +20,8 @@ model VerifiedAccount {
   moderationReason    String?
   moderationUpdatedAt DateTime?
   histories           MessageHistory[]
+  replies             Reply[]
+  replyRequests       PublicationRequest[] @relation("ReplyTarget")
 
   @@index([hiddenByModeration, nanoAddress])
   @@index([verifiedAt])
@@ -36,8 +38,11 @@ model PublicationRequest {
   completedAt    DateTime?
   paymentHash    String?
   payments       Payment[]
+  replyToAccountId String?
+  replyToAccount   VerifiedAccount? @relation("ReplyTarget", fields: [replyToAccountId], references: [id])
 
   @@index([nanoAddress, status, expiresAt])
+  @@index([replyToAccountId, status, expiresAt])
   @@index([createdAt])
 }
 
@@ -75,6 +80,26 @@ model MessageHistory {
   @@index([paymentHash])
 }
 
+model Reply {
+  id                  String          @id @default(cuid())
+  parentAccountId     String
+  parentAccount       VerifiedAccount @relation(fields: [parentAccountId], references: [id])
+  nanoAddress         String
+  message             String
+  showBalance         Boolean         @default(true)
+  cachedBalanceRaw    String          @default("0")
+  balanceUpdatedAt    DateTime?
+  paymentHash         String
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  hiddenByModeration  Boolean         @default(false)
+  moderationReason    String?
+
+  @@unique([parentAccountId, nanoAddress])
+  @@index([nanoAddress])
+  @@index([parentAccountId, hiddenByModeration])
+}
+
 model AdminAudit {
   id        String   @id @default(cuid())
   action    String
@@ -104,4 +129,5 @@ enum PaymentStatus {
 enum OperationType {
   INITIAL_PUBLICATION
   UPDATE
+  REPLY
 }

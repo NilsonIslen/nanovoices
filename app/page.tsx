@@ -31,6 +31,7 @@ type RankingItem = {
   nanoAddress: string;
   message: string;
   updatedAt: string;
+  publicUrl: string;
   balance: { raw: string; xno: string } | null;
   balanceHidden: boolean;
 };
@@ -476,6 +477,12 @@ function RankingCard({ item }: { item: RankingItem }) {
           <p className="mt-1 text-sm text-slate-500">
             Actualizado {new Date(item.updatedAt).toLocaleDateString("es")}
           </p>
+          <a
+            className="focus-ring mt-3 inline-flex rounded-xl border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]"
+            href={item.publicUrl}
+          >
+            Responder
+          </a>
         </div>
       </div>
     </article>
