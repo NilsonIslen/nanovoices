@@ -284,8 +284,9 @@ export default function Home() {
           </div>
 
           <div>
+            <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">Ranking de nivel 1</h2>
             <form
-              className="rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-3 shadow-sm md:p-4"
+              className="mt-2 rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-3 shadow-sm md:p-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 if (editorReady) {
@@ -343,12 +344,6 @@ export default function Home() {
       ) : null}
 
       <section className="mx-auto max-w-6xl px-4 pb-8 pt-4 md:px-6 md:pt-5">
-        <div className="mb-1">
-          <div>
-            <h2 className="text-2xl font-semibold text-[var(--nano-deep)]">Ranking de nivel 1</h2>
-          </div>
-        </div>
-
         {rankingError ? (
           <p className="mb-5 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {rankingError}
