@@ -220,7 +220,7 @@ export default function Home() {
                   NanoVoices
                 </p>
                 <h1 className="mt-1 whitespace-nowrap text-sm font-semibold text-[var(--nano-deep)] md:text-base">
-                  Predominan las cuentas con más XNO
+                  Predominan las cuentas con más XNO guardado
                 </h1>
               </div>
             </div>
