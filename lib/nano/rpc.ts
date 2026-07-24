@@ -2,6 +2,14 @@ import { REQUIRED_PAYMENT_RAW } from "@/lib/env";
 
 const RPC_TIMEOUT_MS = 10_000;
 const RPC_ERROR_COOLDOWN_MS = 60_000;
+const DEFAULT_LOCAL_NANO_RPC_URL = "http://127.0.0.1:7076";
+const DEFAULT_PUBLIC_NANO_RPC_FALLBACK_URLS = [
+  "https://rainstorm.city/api",
+  "https://nanoslo.0x.no/proxy",
+  "https://nodes.nanswap.com/XNO",
+  "https://node.somenano.com/proxy",
+  "https://rpc.nano.to",
+];
 const rpcCooldowns = new Map<string, number>();
 
 export type NanoBlockInfo = {
@@ -138,14 +146,22 @@ async function requestNanoRpc<T>(rpcUrl: string, body: Record<string, unknown>) 
   }
 }
 
-function getNanoRpcUrls() {
-  return [
-    process.env.NANO_RPC_URL ?? "http://127.0.0.1:7076",
-    ...(process.env.NANO_RPC_FALLBACK_URLS ?? "")
-      .split(",")
-      .map((url) => url.trim())
-      .filter(Boolean),
+export function getNanoRpcUrls() {
+  const configuredFallbacks = parseRpcUrls(process.env.NANO_RPC_FALLBACK_URLS);
+  const rpcUrls = [
+    process.env.NANO_RPC_URL?.trim() || DEFAULT_LOCAL_NANO_RPC_URL,
+    ...configuredFallbacks,
+    ...DEFAULT_PUBLIC_NANO_RPC_FALLBACK_URLS,
   ];
+
+  return [...new Set(rpcUrls)];
+}
+
+function parseRpcUrls(value: string | undefined) {
+  return (value ?? "")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean);
 }
 
 function isRateLimitError(error: string, message?: string) {

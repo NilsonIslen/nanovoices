@@ -38,8 +38,8 @@ npm run worker
 ## Variables de Entorno
 
 - `DATABASE_URL`: conexión PostgreSQL.
-- `NANO_RPC_URL`: URL privada del RPC Nano.
-- `NANO_RPC_FALLBACK_URLS`: RPC alternos separados por coma.
+- `NANO_RPC_URL`: URL privada del RPC Nano. Por defecto usa el nodo local `http://127.0.0.1:7076`.
+- `NANO_RPC_FALLBACK_URLS`: RPC alternos separados por coma. Se prueban después de `NANO_RPC_URL` y antes de los nodos públicos integrados.
 - `NANO_RPC_TOKEN`: token opcional para un proxy RPC.
 - `NANO_WS_URL`: WebSocket del nodo Nano.
 - `NANOVOICES_RECEIVER_ADDRESS`: cuenta oficial receptora.
@@ -74,6 +74,11 @@ El backend usa:
 - `account_history` de la cuenta receptora para recuperación de bloques ya recibidos.
 - `accounts_balances` para consultar solo cuentas verificadas.
 - `nano_to_raw` si el nodo lo soporta, para confirmar que `0.02` XNO equivale a `20000000000000000000000000000` raw.
+
+Las consultas RPC siempre intentan primero `NANO_RPC_URL`. Si no responde, se prueban los fallbacks configurados en
+`NANO_RPC_FALLBACK_URLS` y luego nodos públicos integrados. El identificador de nodo
+`node_1ronuiipd4wfn1h41573mg94guexwuc5u848tag1jfmmrs184bsem7549nzk` permite reconocer tu nodo, pero la aplicación
+consulta por URL RPC HTTP, por ejemplo `http://127.0.0.1:7076` si corre en la misma máquina.
 
 El RPC puede vivir detrás de red privada, túnel o proxy autenticado. No debe publicarse directamente en internet.
 

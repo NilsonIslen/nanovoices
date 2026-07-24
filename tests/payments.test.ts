@@ -2,7 +2,7 @@ import { PaymentStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { REQUIRED_PAYMENT_RAW, rawToXno } from "@/lib/nano/amount";
 import { getLinkedSendHash, validatePaymentBlock } from "@/lib/payments";
-import { getBlockDestination } from "@/lib/nano/rpc";
+import { getBlockDestination, getNanoRpcUrls } from "@/lib/nano/rpc";
 import type { NanoBlockInfo } from "@/lib/nano/rpc";
 
 const receiver = "nano_1111111111111111111111111111111111111111111111111111hifc8npp";
@@ -22,6 +22,28 @@ function block(overrides: Partial<NanoBlockInfo> = {}): NanoBlockInfo {
 }
 
 describe("lógica crítica de pagos Nano", () => {
+  it("consulta primero el nodo Nano local cuando no hay RPC configurado", () => {
+    delete process.env.NANO_RPC_URL;
+    delete process.env.NANO_RPC_FALLBACK_URLS;
+
+    expect(getNanoRpcUrls()[0]).toBe("http://127.0.0.1:7076");
+    expect(getNanoRpcUrls()).toContain("https://rainstorm.city/api");
+  });
+
+  it("mantiene el RPC configurado como primera opción antes de los nodos públicos", () => {
+    process.env.NANO_RPC_URL = "http://host.docker.internal:7076";
+    process.env.NANO_RPC_FALLBACK_URLS = "https://example.test/rpc, https://rainstorm.city/api";
+
+    expect(getNanoRpcUrls().slice(0, 3)).toEqual([
+      "http://host.docker.internal:7076",
+      "https://example.test/rpc",
+      "https://rainstorm.city/api",
+    ]);
+
+    delete process.env.NANO_RPC_URL;
+    delete process.env.NANO_RPC_FALLBACK_URLS;
+  });
+
   it("representa 0,02 XNO como 2 * 10^28 raw sin decimales", () => {
     expect(REQUIRED_PAYMENT_RAW.toString()).toBe("20000000000000000000000000000");
     expect(rawToXno(REQUIRED_PAYMENT_RAW.toString())).toBe("0.02");
