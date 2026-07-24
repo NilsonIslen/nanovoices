@@ -43,6 +43,7 @@ type RankingItem = {
 };
 
 const RANKING_REFRESH_MS = 30000;
+const PAYMENT_STATUS_POLL_MS = 12000;
 const PAYMENT_STORAGE_KEY = "nanovoices:publication-request";
 
 export default function Home() {
@@ -275,7 +276,7 @@ export default function Home() {
       if (completed) {
         clearInterval(interval);
       }
-    }, 3000);
+    }, PAYMENT_STATUS_POLL_MS);
 
     return () => clearInterval(interval);
   }, [paymentRequest, validatePaymentStatus]);

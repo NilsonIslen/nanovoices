@@ -1,6 +1,7 @@
 import { REQUIRED_PAYMENT_RAW } from "@/lib/env";
 
 const RPC_TIMEOUT_MS = 10_000;
+const RPC_ERROR_COOLDOWN_MS = 60_000;
 const rpcCooldowns = new Map<string, number>();
 
 export type NanoBlockInfo = {
@@ -118,6 +119,8 @@ async function requestNanoRpc<T>(rpcUrl: string, body: Record<string, unknown>) 
         const retrySeconds = retryAfter > nowSeconds ? retryAfter - nowSeconds : retryAfter;
         const cooldownSeconds = Math.min(Math.max(retrySeconds, 1), 30);
         rpcCooldowns.set(rpcUrl, Date.now() + cooldownSeconds * 1000);
+      } else if (isRateLimitError(data.error, data.message)) {
+        rpcCooldowns.set(rpcUrl, Date.now() + RPC_ERROR_COOLDOWN_MS);
       }
 
       throw new Error(data.message || data.error);
@@ -145,11 +148,17 @@ function getNanoRpcUrls() {
   ];
 }
 
+function isRateLimitError(error: string, message?: string) {
+  const text = `${error} ${message ?? ""}`.toLowerCase();
+  return text.includes("429") || text.includes("rate") || text.includes("limit");
+}
+
 export async function getBlockInfo(hash: string) {
   const data = await nanoRpc<NanoBlockInfo>({
     action: "block_info",
     hash,
     json_block: "true",
+    include_linked_account: "true",
   });
 
   return normalizeBlockInfo(data);
