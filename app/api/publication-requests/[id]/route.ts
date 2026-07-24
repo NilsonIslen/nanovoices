@@ -12,7 +12,7 @@ import {
   requiredReceiverAddress,
 } from "@/lib/env";
 import { getReceiverHistory, getReceiverReceivable, isNanoHash } from "@/lib/nano/rpc";
-import { processPaymentHash } from "@/lib/payments";
+import { isAcceptedPaymentAmount, processPaymentHash } from "@/lib/payments";
 import { prisma } from "@/lib/prisma";
 import { sanitizeMessage } from "@/lib/sanitize";
 import { deleteAccountDescendants, deleteReplyDescendants } from "@/lib/threads";
@@ -255,17 +255,34 @@ async function claimPaymentIfAvailable(id: string) {
     }
 
     const now = new Date();
-    const payment = await tx.payment.findFirst({
+    const candidatePayments = await tx.payment.findMany({
       where: {
         status: PaymentStatus.UNASSOCIATED,
         destinationAddress: requiredReceiverAddress(),
-        amountRaw: REQUIRED_PAYMENT_RAW,
+        requestId: null,
         detectedAt: {
           gte: new Date(publicationRequest.createdAt.getTime() - PAYMENT_CLAIM_GRACE_MS),
         },
       },
       orderBy: { detectedAt: "asc" },
     });
+    const expectedAmountRaw = publicationRequest.amountRaw || REQUIRED_PAYMENT_RAW;
+    const competingRequests = await tx.publicationRequest.findMany({
+      where: {
+        id: { not: id },
+        status: PublicationRequestStatus.PENDING,
+        paymentHash: null,
+      },
+      select: { amountRaw: true },
+    });
+    const competingAmounts = new Set(competingRequests.map((request) => request.amountRaw));
+    const payment =
+      candidatePayments.find((candidate) => candidate.amountRaw === expectedAmountRaw) ??
+      candidatePayments.find(
+        (candidate) =>
+          !competingAmounts.has(candidate.amountRaw) &&
+          isAcceptedPaymentAmount(candidate.amountRaw, expectedAmountRaw),
+      );
 
     if (!payment) {
       if (

@@ -33,6 +33,7 @@ model PublicationRequest {
   pendingMessage String                   @default("")
   showBalance    Boolean                  @default(true)
   status         PublicationRequestStatus @default(PENDING)
+  amountRaw      String                   @default("20000000000000000000000000000")
   createdAt      DateTime                 @default(now())
   expiresAt      DateTime
   completedAt    DateTime?

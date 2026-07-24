@@ -1,6 +1,17 @@
 export const RAW_PER_XNO = 10n ** 30n;
 export const REQUIRED_PAYMENT_RAW = 2n * 10n ** 28n;
 
+export function xnoToRaw(value: string) {
+  const normalized = value.trim();
+
+  if (!/^\d+(\.\d{1,30})?$/.test(normalized)) {
+    throw new Error("Cantidad XNO inválida");
+  }
+
+  const [whole = "0", fraction = ""] = normalized.split(".");
+  return (BigInt(whole) * RAW_PER_XNO + BigInt(fraction.padEnd(30, "0"))).toString();
+}
+
 export function rawToXno(raw: string) {
   if (!/^\d+$/.test(raw)) {
     throw new Error("Cantidad raw inválida");
@@ -23,4 +34,11 @@ export function compareRawDesc(a: string, b: string) {
 
   if (left === right) return 0;
   return left > right ? -1 : 1;
+}
+
+export function rawDifference(left: string, right: string) {
+  const leftRaw = BigInt(left);
+  const rightRaw = BigInt(right);
+
+  return leftRaw > rightRaw ? leftRaw - rightRaw : rightRaw - leftRaw;
 }

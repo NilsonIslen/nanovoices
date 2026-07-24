@@ -1,14 +1,14 @@
 import QRCode from "qrcode";
 import { NextResponse, type NextRequest } from "next/server";
-import { PublicationRequestStatus } from "@prisma/client";
+import { PublicationRequestStatus, type Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
-  REQUIRED_PAYMENT_NANO,
   REQUIRED_PAYMENT_RAW,
   REQUEST_EXPIRATION_MINUTES,
   publicAppUrl,
   requiredReceiverAddress,
 } from "@/lib/env";
+import { rawToXno } from "@/lib/nano/amount";
 import { prisma } from "@/lib/prisma";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { resolveThreadContext } from "@/lib/threads";
@@ -46,11 +46,13 @@ export async function POST(request: NextRequest) {
         data: { status: PublicationRequestStatus.EXPIRED },
       });
 
+      const amountRaw = await createUniquePaymentRaw(tx);
       const created = await tx.publicationRequest.create({
         data: {
           nanoAddress: "",
           pendingMessage: "",
           showBalance: true,
+          amountRaw,
           expiresAt,
           replyToAccountId: context.kind === "account" ? context.parentAccountId : null,
           replyToReplyId: context.kind === "reply" ? context.parentReplyId : null,
@@ -65,7 +67,8 @@ export async function POST(request: NextRequest) {
     }
 
     const receiverAddress = requiredReceiverAddress();
-    const paymentUri = `nano:${receiverAddress}?amount=${REQUIRED_PAYMENT_RAW}&label=NanoVoices`;
+    const amountNano = rawToXno(result.request.amountRaw);
+    const paymentUri = `nano:${receiverAddress}?amount=${result.request.amountRaw}&label=NanoVoices`;
     const qrCodeDataUrl = await QRCode.toDataURL(paymentUri, {
       margin: 1,
       width: 260,
@@ -75,8 +78,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       id: result.request.id,
       receiverAddress,
-      amountNano: REQUIRED_PAYMENT_NANO,
-      amountRaw: REQUIRED_PAYMENT_RAW,
+      amountNano,
+      amountRaw: result.request.amountRaw,
       expiresAt: result.request.expiresAt.toISOString(),
       status: result.request.status,
       reused: result.reused,
@@ -95,4 +98,25 @@ export async function POST(request: NextRequest) {
       { status: 503 },
     );
   }
+}
+
+async function createUniquePaymentRaw(tx: Prisma.TransactionClient) {
+  const baseRaw = BigInt(REQUIRED_PAYMENT_RAW);
+  const suffixQuantumRaw = 10n ** 18n;
+  const activeRequests = await tx.publicationRequest.findMany({
+    where: { status: PublicationRequestStatus.PENDING },
+    select: { amountRaw: true },
+  });
+  const activeAmounts = new Set(activeRequests.map((request) => request.amountRaw));
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const suffix = BigInt(Math.floor(Math.random() * 900_000) + 100_000);
+    const amountRaw = (baseRaw + suffix * suffixQuantumRaw).toString();
+
+    if (!activeAmounts.has(amountRaw)) {
+      return amountRaw;
+    }
+  }
+
+  return REQUIRED_PAYMENT_RAW;
 }

@@ -9,11 +9,14 @@ export type NanoBlockInfo = {
   confirmed?: string;
   subtype?: string;
   type?: string;
+  link_as_account?: string;
+  linked_account?: string;
   contents?:
     | string
     | {
         link?: string;
         link_as_account?: string;
+        linked_account?: string;
       };
   local_timestamp?: string;
 };
@@ -31,7 +34,7 @@ export type NanoConfirmationMessage = {
   };
 };
 
-type AccountHistoryEntry = {
+export type AccountHistoryEntry = {
   hash?: string;
   type?: string;
   subtype?: string;
@@ -42,17 +45,22 @@ type AccountHistoryEntry = {
   timestamp?: string;
 };
 
-type ReceivableEntry = {
+export type ReceivableEntry = {
   amount?: string;
   source?: string;
 };
 
-export async function nanoRpc<T>(body: Record<string, unknown>) {
+type NanoRpcOptions<T> = {
+  shouldRetryWithFallback?: (data: T) => boolean;
+};
+
+export async function nanoRpc<T>(body: Record<string, unknown>, options: NanoRpcOptions<T> = {}) {
   const rpcUrls = getNanoRpcUrls();
   let lastError: unknown;
 
   for (let index = 0; index < rpcUrls.length; index += 1) {
     const rpcUrl = rpcUrls[index];
+    const isLastRpc = index === rpcUrls.length - 1;
     const cooldownUntil = rpcCooldowns.get(rpcUrl) ?? 0;
 
     if (cooldownUntil > Date.now()) {
@@ -61,7 +69,13 @@ export async function nanoRpc<T>(body: Record<string, unknown>) {
     }
 
     try {
-      return await requestNanoRpc<T>(rpcUrl, body);
+      const data = await requestNanoRpc<T>(rpcUrl, body);
+
+      if (!isLastRpc && options.shouldRetryWithFallback?.(data)) {
+        continue;
+      }
+
+      return data;
     } catch (error) {
       lastError = error;
     }
@@ -110,6 +124,12 @@ async function requestNanoRpc<T>(rpcUrl: string, body: Record<string, unknown>) 
     }
 
     return data;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("El nodo Nano tardó demasiado en responder");
+    }
+
+    throw error;
   } finally {
     clearTimeout(timeout);
   }
@@ -141,6 +161,9 @@ export async function getReceiverHistory(receiverAddress: string, count: number)
     account: receiverAddress,
     count: String(count),
     raw: "true",
+  }, {
+    shouldRetryWithFallback: (history) =>
+      !Array.isArray(history.history) || history.history.length === 0,
   });
 
   return Array.isArray(data.history) ? data.history : [];
@@ -153,6 +176,11 @@ export async function getReceiverReceivable(receiverAddress: string, count: numb
     count: String(count),
     source: "true",
     include_only_confirmed: "true",
+  }, {
+    shouldRetryWithFallback: (receivable) =>
+      !receivable.blocks ||
+      typeof receivable.blocks !== "object" ||
+      Object.keys(receivable.blocks).length === 0,
   });
 
   if (!data.blocks || typeof data.blocks !== "object") {
@@ -199,11 +227,19 @@ export async function confirmRequiredAmountWithNode() {
 }
 
 export function getBlockDestination(block: NanoBlockInfo) {
+  if (block.link_as_account) {
+    return block.link_as_account;
+  }
+
+  if (block.linked_account) {
+    return block.linked_account;
+  }
+
   if (!block.contents || typeof block.contents === "string") {
     return undefined;
   }
 
-  return block.contents.link_as_account;
+  return block.contents.link_as_account ?? block.contents.linked_account;
 }
 
 export function getBlockLink(block: NanoBlockInfo) {

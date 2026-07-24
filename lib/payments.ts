@@ -1,5 +1,10 @@
 import { PaymentStatus, type Prisma } from "@prisma/client";
-import { REQUIRED_PAYMENT_RAW, requiredReceiverAddress } from "@/lib/env";
+import {
+  PAYMENT_AMOUNT_TOLERANCE_RAW,
+  REQUIRED_PAYMENT_RAW,
+  requiredReceiverAddress,
+} from "@/lib/env";
+import { rawDifference } from "@/lib/nano/amount";
 import { prisma } from "@/lib/prisma";
 import {
   getBlockDestination,
@@ -114,10 +119,26 @@ export function validatePaymentBlock(block: NanoBlockInfo, receiverAddress: stri
   }
 
   if (block.amount !== REQUIRED_PAYMENT_RAW) {
+    if (isAcceptedPaymentAmount(block.amount, REQUIRED_PAYMENT_RAW)) {
+      return null;
+    }
+
     return PaymentStatus.INVALID_AMOUNT;
   }
 
   return null;
+}
+
+export function isAcceptedPaymentAmount(actualRaw: string | undefined, expectedRaw = REQUIRED_PAYMENT_RAW) {
+  if (!actualRaw || !/^\d+$/.test(actualRaw) || !/^\d+$/.test(expectedRaw)) {
+    return false;
+  }
+
+  const toleranceRaw = /^\d+$/.test(PAYMENT_AMOUNT_TOLERANCE_RAW)
+    ? PAYMENT_AMOUNT_TOLERANCE_RAW
+    : "1000000000000000000000000";
+
+  return rawDifference(actualRaw, expectedRaw) <= BigInt(toleranceRaw);
 }
 
 export async function resolveSendBlock(blockHash: string) {

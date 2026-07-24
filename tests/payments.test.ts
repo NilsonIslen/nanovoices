@@ -2,6 +2,7 @@ import { PaymentStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { REQUIRED_PAYMENT_RAW, rawToXno } from "@/lib/nano/amount";
 import { getLinkedSendHash, validatePaymentBlock } from "@/lib/payments";
+import { getBlockDestination } from "@/lib/nano/rpc";
 import type { NanoBlockInfo } from "@/lib/nano/rpc";
 
 const receiver = "nano_1111111111111111111111111111111111111111111111111111hifc8npp";
@@ -36,6 +37,20 @@ describe("lógica crítica de pagos Nano", () => {
     );
   });
 
+  it("acepta importes únicos dentro de la tolerancia del pago base", () => {
+    const uniqueAmount = (REQUIRED_PAYMENT_RAW + 999_999n * 10n ** 18n).toString();
+
+    expect(validatePaymentBlock(block({ amount: uniqueAmount }), receiver)).toBeNull();
+  });
+
+  it("rechaza importes por encima de la tolerancia", () => {
+    const tooHighAmount = (REQUIRED_PAYMENT_RAW + 1_000_001n * 10n ** 18n).toString();
+
+    expect(validatePaymentBlock(block({ amount: tooHighAmount }), receiver)).toBe(
+      PaymentStatus.INVALID_AMOUNT,
+    );
+  });
+
   it("rechaza destinos distintos", () => {
     expect(validatePaymentBlock(block(), "nano_1111111111111111111111111111111111111111111111111117353trpda")).toBe(
       PaymentStatus.INVALID_DESTINATION,
@@ -66,5 +81,12 @@ describe("lógica crítica de pagos Nano", () => {
         contents: { link: "not-a-hash", link_as_account: receiver },
       }),
     ).toBeNull();
+  });
+
+  it("lee el destino desde variantes comunes de block_info", () => {
+    expect(getBlockDestination(block({ contents: { link_as_account: receiver } }))).toBe(receiver);
+    expect(getBlockDestination(block({ contents: { linked_account: receiver } }))).toBe(receiver);
+    expect(getBlockDestination(block({ link_as_account: receiver, contents: { link: "0".repeat(64) } }))).toBe(receiver);
+    expect(getBlockDestination(block({ linked_account: receiver, contents: { link: "0".repeat(64) } }))).toBe(receiver);
   });
 });
