@@ -45,6 +45,7 @@ type RankingItem = {
 const RANKING_REFRESH_MS = 30000;
 const PAYMENT_STATUS_POLL_MS = 12000;
 const PAYMENT_STORAGE_KEY = "nanovoices:publication-request";
+const NANO_NODE_MONITOR_URL = "http://monitor.167.71.17.126.nip.io";
 
 export default function Home() {
   const [message, setMessage] = useState("");
@@ -288,26 +289,36 @@ export default function Home() {
       <section className="border-b border-[var(--nano-line)] bg-white">
         <div className="mx-auto grid max-w-6xl gap-4 px-4 pb-6 pt-0 md:grid-cols-[0.95fr_1.05fr] md:gap-6 md:px-6 md:pb-8 md:pt-0">
           <div>
-            <div className="mb-2 flex items-center gap-3">
-              <div
-                aria-hidden="true"
-                className="grid h-12 w-12 place-items-center"
-              >
-                <div className="relative h-8 w-9 rounded bg-[var(--nano-blue)]">
-                  <span className="absolute -bottom-1 left-3 h-3 w-3 rotate-45 rounded-[2px] bg-[var(--nano-blue)]" />
-                  <span className="absolute left-[9px] top-[13px] h-1.5 w-1.5 rounded-full bg-white" />
-                  <span className="absolute left-[17px] top-[13px] h-1.5 w-1.5 rounded-full bg-white" />
-                  <span className="absolute right-[9px] top-[13px] h-1.5 w-1.5 rounded-full bg-white" />
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div
+                  aria-hidden="true"
+                  className="grid h-12 w-12 place-items-center"
+                >
+                  <div className="relative h-8 w-9 rounded bg-[var(--nano-blue)]">
+                    <span className="absolute -bottom-1 left-3 h-3 w-3 rotate-45 rounded-[2px] bg-[var(--nano-blue)]" />
+                    <span className="absolute left-[9px] top-[13px] h-1.5 w-1.5 rounded-full bg-white" />
+                    <span className="absolute left-[17px] top-[13px] h-1.5 w-1.5 rounded-full bg-white" />
+                    <span className="absolute right-[9px] top-[13px] h-1.5 w-1.5 rounded-full bg-white" />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold uppercase tracking-[0.12em] text-[var(--nano-blue)] md:text-4xl">
+                    NanoVoices
+                  </p>
+                  <h1 className="mt-1 whitespace-nowrap text-sm font-semibold text-[var(--nano-deep)] md:text-base">
+                    Predominan las cuentas con más XNO guardado
+                  </h1>
                 </div>
               </div>
-              <div>
-                <p className="text-2xl font-semibold uppercase tracking-[0.12em] text-[var(--nano-blue)] md:text-4xl">
-                  NanoVoices
-                </p>
-                <h1 className="mt-1 whitespace-nowrap text-sm font-semibold text-[var(--nano-deep)] md:text-base">
-                  Predominan las cuentas con más XNO guardado
-                </h1>
-              </div>
+              <a
+                className="focus-ring shrink-0 rounded border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]"
+                href={NANO_NODE_MONITOR_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Nodo Nano
+              </a>
             </div>
           </div>
 
