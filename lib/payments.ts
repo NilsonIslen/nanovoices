@@ -19,7 +19,7 @@ export async function processPaymentHash(blockHash: string): Promise<ProcessPaym
   const candidate = await resolveSendBlock(normalizedHash);
   const existing = await prisma.payment.findUnique({ where: { blockHash: candidate.hash } });
 
-  if (existing) {
+  if (existing?.status === PaymentStatus.PROCESSED) {
     return { status: "ignored", reason: "DUPLICATE" };
   }
 
@@ -157,12 +157,29 @@ async function saveUnassociated(
   >,
 ) {
   try {
-    await prisma.payment.create({
-      data: {
-        blockHash,
-        ...data,
-      },
-    });
+    const existing = await prisma.payment.findUnique({ where: { blockHash } });
+
+    if (existing?.status === PaymentStatus.PROCESSED) {
+      return { status: "ignored" as const, reason: "DUPLICATE" as const };
+    }
+
+    if (existing) {
+      await prisma.payment.update({
+        where: { id: existing.id },
+        data: {
+          ...data,
+          requestId: null,
+          operationType: null,
+        },
+      });
+    } else {
+      await prisma.payment.create({
+        data: {
+          blockHash,
+          ...data,
+        },
+      });
+    }
   } catch {
     return { status: "ignored" as const, reason: "DUPLICATE" as const };
   }

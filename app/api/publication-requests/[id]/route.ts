@@ -6,7 +6,13 @@ import {
   type Prisma,
 } from "@prisma/client";
 import { refreshVerifiedAccountBalances } from "@/lib/balances";
-import { REQUIRED_PAYMENT_RAW, requiredReceiverAddress } from "@/lib/env";
+import {
+  PAYMENT_RECOVERY_HISTORY_COUNT,
+  REQUIRED_PAYMENT_RAW,
+  requiredReceiverAddress,
+} from "@/lib/env";
+import { getReceiverHistory, getReceiverReceivable, isNanoHash } from "@/lib/nano/rpc";
+import { processPaymentHash } from "@/lib/payments";
 import { prisma } from "@/lib/prisma";
 import { sanitizeMessage } from "@/lib/sanitize";
 import { deleteAccountDescendants, deleteReplyDescendants } from "@/lib/threads";
@@ -17,6 +23,9 @@ const PAYMENT_CLAIM_GRACE_MS = 15 * 60_000;
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
+    await recoverIncomingPaymentsForRequest(id).catch((error) => {
+      console.error("No se pudo recuperar pagos por RPC al validar solicitud", error);
+    });
     const publicationRequest = await claimPaymentIfAvailable(id);
 
     if (!publicationRequest) {
@@ -53,6 +62,38 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       { error: "No se pudo consultar el estado. Revisa PostgreSQL." },
       { status: 503 },
     );
+  }
+}
+
+async function recoverIncomingPaymentsForRequest(id: string) {
+  const publicationRequest = await prisma.publicationRequest.findUnique({
+    where: { id },
+    select: { status: true, paymentHash: true },
+  });
+
+  if (!publicationRequest) return;
+  if (publicationRequest.paymentHash || publicationRequest.status === PublicationRequestStatus.COMPLETED) return;
+
+  const receiverAddress = requiredReceiverAddress();
+  const [receivable, history] = await Promise.all([
+    getReceiverReceivable(receiverAddress, PAYMENT_RECOVERY_HISTORY_COUNT),
+    getReceiverHistory(receiverAddress, PAYMENT_RECOVERY_HISTORY_COUNT),
+  ]);
+
+  for (const [hash] of receivable) {
+    const normalizedHash = hash.trim().toUpperCase();
+
+    if (isNanoHash(normalizedHash)) {
+      await processPaymentHash(normalizedHash);
+    }
+  }
+
+  for (const entry of history) {
+    const normalizedHash = entry.hash?.trim().toUpperCase();
+
+    if (normalizedHash && entry.confirmed === "true" && isNanoHash(normalizedHash)) {
+      await processPaymentHash(normalizedHash);
+    }
   }
 }
 

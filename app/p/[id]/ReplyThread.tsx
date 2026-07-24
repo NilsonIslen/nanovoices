@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { LinkifiedMessage } from "@/components/LinkifiedMessage";
+import { MESSAGE_MAX_LENGTH } from "@/lib/sanitize";
 
 type ReplyItem = {
   id: string;
@@ -44,8 +45,9 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
   const [replies, setReplies] = useState<ReplyItem[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [validatingPayment, setValidatingPayment] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const charsLeft = 300 - message.length;
+  const charsLeft = MESSAGE_MAX_LENGTH - message.length;
   const remainingSeconds = useCountdown(paymentRequest?.expiresAt);
   const editorReady = Boolean(paidRequestId);
   const paymentStorageKey = `nanovoices:reply-request:${parentId}`;
@@ -102,6 +104,42 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
       setLoading(false);
     }
   }
+
+  const validatePaymentStatus = useCallback(
+    async (request: PaymentRequest, interactive = true) => {
+      if (interactive) {
+        setError("");
+        setValidatingPayment(true);
+      }
+
+      try {
+        const response = await fetch(`/api/publication-requests/${request.id}`);
+        const data = await readJsonResponse<RequestStatus & { error?: string }>(response);
+        if (!response.ok) throw new Error(data.error ?? "No se pudo validar el pago.");
+        setRequestStatus(data);
+
+        if (data.status === "COMPLETED") {
+          setPaidRequestId(request.id);
+          setMessage(data.existingMessage ?? "");
+          setPaymentRequest(null);
+          rememberPaymentRequest(paymentStorageKey, request, request.id);
+          return true;
+        }
+
+        return false;
+      } catch (caught) {
+        if (interactive) {
+          setError(caught instanceof Error ? caught.message : "No se pudo validar el pago.");
+        }
+        return false;
+      } finally {
+        if (interactive) {
+          setValidatingPayment(false);
+        }
+      }
+    },
+    [paymentStorageKey],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -180,22 +218,14 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
     if (!paymentRequest) return;
 
     const interval = setInterval(async () => {
-      const response = await fetch(`/api/publication-requests/${paymentRequest.id}`);
-      const data = await readJsonResponse<RequestStatus>(response);
-      if (!response.ok) return;
-      setRequestStatus(data);
-
-      if (data.status === "COMPLETED") {
+      const completed = await validatePaymentStatus(paymentRequest, false);
+      if (completed) {
         clearInterval(interval);
-        setPaidRequestId(paymentRequest.id);
-        setMessage(data.existingMessage ?? "");
-        setPaymentRequest(null);
-        rememberPaymentRequest(paymentStorageKey, paymentRequest, paymentRequest.id);
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [paymentRequest, paymentStorageKey]);
+  }, [paymentRequest, validatePaymentStatus]);
 
   return (
     <section className="mx-auto mt-4 max-w-3xl">
@@ -220,14 +250,14 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
                 Tu mensaje
               </label>
               <span className={charsLeft < 0 ? "text-sm text-red-600" : "text-sm text-slate-500"}>
-                {message.length}/300
+                {message.length}/{MESSAGE_MAX_LENGTH}
               </span>
             </div>
             <textarea
               id="replyMessage"
               className="focus-ring mt-2 min-h-24 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
               value={message}
-              maxLength={300}
+              maxLength={MESSAGE_MAX_LENGTH}
               onChange={(event) => setMessage(event.target.value)}
             />
           </>
@@ -268,6 +298,14 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
                 >
                   Pagar con wallet Nano
                 </a>
+                <button
+                  className="focus-ring rounded-xl border border-[var(--nano-blue)] bg-white px-4 py-3 text-sm font-semibold text-[var(--nano-blue)] disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  onClick={() => validatePaymentStatus(paymentRequest)}
+                  disabled={validatingPayment}
+                >
+                  {validatingPayment ? "Validando..." : "Validar pago"}
+                </button>
                 <button
                   className="focus-ring rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
                   type="button"
