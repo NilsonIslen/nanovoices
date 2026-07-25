@@ -84,7 +84,6 @@ export default function Home() {
       setPaymentRequest(data);
       setRequestStatus(null);
       setPaidRequestId(null);
-      rememberPaymentRequest(data, null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
     } finally {
@@ -139,6 +138,7 @@ export default function Home() {
     setPaymentRequest(null);
     setRequestStatus(null);
     setError("");
+    forgetPaymentRequest();
   }
 
   const validatePaymentStatus = useCallback(async (request: PaymentRequest, interactive = true) => {
@@ -191,9 +191,8 @@ export default function Home() {
         return;
       }
 
-      setRequestStatus(data);
-
       if (data.status === "COMPLETED") {
+        setRequestStatus(data);
         setPaidRequestId(activeStored.request.id);
         setMessage(data.existingMessage ?? "");
         rememberPaymentRequest(activeStored.request, activeStored.request.id);
@@ -201,15 +200,12 @@ export default function Home() {
       }
 
       if (data.status === "PENDING") {
-        setPaymentRequest(activeStored.request);
-        setPaidRequestId(null);
-        rememberPaymentRequest(activeStored.request, null);
+        forgetPaymentRequest();
         return;
       }
 
       if (data.status === "EXPIRED") {
-        setPaymentRequest(activeStored.request);
-        setPaidRequestId(null);
+        forgetPaymentRequest();
         return;
       }
 
@@ -289,8 +285,8 @@ export default function Home() {
       <section className="border-b border-[var(--nano-line)] bg-white">
         <div className="mx-auto grid max-w-6xl gap-4 px-4 pb-6 pt-0 md:grid-cols-[0.95fr_1.05fr] md:gap-6 md:px-6 md:pb-8 md:pt-0">
           <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <div
                   aria-hidden="true"
                   className="grid h-12 w-12 place-items-center"
@@ -302,17 +298,17 @@ export default function Home() {
                     <span className="absolute right-[9px] top-[13px] h-1.5 w-1.5 rounded-full bg-white" />
                   </div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-2xl font-semibold uppercase tracking-[0.12em] text-[var(--nano-blue)] md:text-4xl">
                     NanoVoices
                   </p>
-                  <h1 className="mt-1 whitespace-nowrap text-sm font-semibold text-[var(--nano-deep)] md:text-base">
+                  <h1 className="mt-1 text-sm font-semibold text-[var(--nano-deep)] md:text-base">
                     Predominan las cuentas con más XNO guardado
                   </h1>
                 </div>
               </div>
               <a
-                className="focus-ring shrink-0 rounded border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]"
+                className="focus-ring shrink-0 whitespace-nowrap rounded border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]"
                 href={NANO_NODE_MONITOR_URL}
                 target="_blank"
                 rel="noreferrer"

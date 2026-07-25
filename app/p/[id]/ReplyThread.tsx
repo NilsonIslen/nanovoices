@@ -72,7 +72,6 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
       setPaymentRequest(data);
       setPaidRequestId(null);
       setRequestStatus(null);
-      rememberPaymentRequest(paymentStorageKey, data, null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
     } finally {
@@ -183,9 +182,8 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
         return;
       }
 
-      setRequestStatus(data);
-
       if (data.status === "COMPLETED") {
+        setRequestStatus(data);
         setPaidRequestId(activeStored.request.id);
         setMessage(data.existingMessage ?? "");
         rememberPaymentRequest(paymentStorageKey, activeStored.request, activeStored.request.id);
@@ -193,15 +191,12 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
       }
 
       if (data.status === "PENDING") {
-        setPaymentRequest(activeStored.request);
-        setPaidRequestId(null);
-        rememberPaymentRequest(paymentStorageKey, activeStored.request, null);
+        forgetPaymentRequest(paymentStorageKey);
         return;
       }
 
       if (data.status === "EXPIRED") {
-        setPaymentRequest(activeStored.request);
-        setPaidRequestId(null);
+        forgetPaymentRequest(paymentStorageKey);
         return;
       }
 
@@ -313,6 +308,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
                   onClick={() => {
                     setPaymentRequest(null);
                     setRequestStatus(null);
+                    forgetPaymentRequest(paymentStorageKey);
                   }}
                 >
                   Cancelar

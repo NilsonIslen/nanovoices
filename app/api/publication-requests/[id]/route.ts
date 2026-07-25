@@ -260,29 +260,18 @@ async function claimPaymentIfAvailable(id: string) {
         status: PaymentStatus.UNASSOCIATED,
         destinationAddress: requiredReceiverAddress(),
         requestId: null,
-        detectedAt: {
+        confirmedAt: {
           gte: new Date(publicationRequest.createdAt.getTime() - PAYMENT_CLAIM_GRACE_MS),
         },
       },
       orderBy: { detectedAt: "asc" },
     });
     const expectedAmountRaw = publicationRequest.amountRaw || REQUIRED_PAYMENT_RAW;
-    const competingRequests = await tx.publicationRequest.findMany({
-      where: {
-        id: { not: id },
-        status: PublicationRequestStatus.PENDING,
-        paymentHash: null,
-      },
-      select: { amountRaw: true },
-    });
-    const competingAmounts = new Set(competingRequests.map((request) => request.amountRaw));
     const payment =
       candidatePayments.find((candidate) => candidate.amountRaw === expectedAmountRaw) ??
-      candidatePayments.find(
-        (candidate) =>
-          !competingAmounts.has(candidate.amountRaw) &&
-          isAcceptedPaymentAmount(candidate.amountRaw, expectedAmountRaw),
-      );
+      (expectedAmountRaw === REQUIRED_PAYMENT_RAW
+        ? candidatePayments.find((candidate) => isAcceptedPaymentAmount(candidate.amountRaw, expectedAmountRaw))
+        : undefined);
 
     if (!payment) {
       if (

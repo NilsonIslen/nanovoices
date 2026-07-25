@@ -104,9 +104,6 @@ function ThreadPage({
             ...chain.map((node) => ({ level: node.level + 1, href: `/p/${node.id}` })),
           ]}
         />
-        <h1 className="mt-4 text-2xl font-semibold text-[var(--nano-deep)]">
-          Hilo hasta nivel {currentLevel}
-        </h1>
         <div className="mt-4 grid gap-3">
           {chain.map((node) => (
             <article

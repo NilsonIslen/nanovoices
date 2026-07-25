@@ -1,4 +1,4 @@
-export const MESSAGE_MAX_LENGTH = 1000;
+export const MESSAGE_MAX_LENGTH = 500;
 
 export function sanitizeMessage(message: string) {
   return message.replace(/\s+/g, " ").trim().slice(0, MESSAGE_MAX_LENGTH);
