@@ -1,8 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LinkifiedMessage } from "@/components/LinkifiedMessage";
 import { rawToXno } from "@/lib/nano/amount";
 import { prisma } from "@/lib/prisma";
-import { LevelNavigator } from "./LevelNavigator";
 import { ReplyThread } from "./ReplyThread";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ type ThreadNode = {
   message: string;
   updatedAt: Date;
   balanceRaw: string;
+  rankingHref: string;
 };
 
 export default async function PublicationPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +30,7 @@ export default async function PublicationPage({ params }: { params: Promise<{ id
         message: account.currentMessage,
         updatedAt: account.updatedAt,
         balanceRaw: account.cachedBalanceRaw,
+        rankingHref: "/",
       },
     ];
 
@@ -70,6 +72,7 @@ export default async function PublicationPage({ params }: { params: Promise<{ id
       message: root.currentMessage,
       updatedAt: root.updatedAt,
       balanceRaw: root.cachedBalanceRaw,
+      rankingHref: "/",
     },
     ...replyChain.map((item) => ({
       id: item.id,
@@ -77,6 +80,7 @@ export default async function PublicationPage({ params }: { params: Promise<{ id
       message: item.message,
       updatedAt: item.updatedAt,
       balanceRaw: item.cachedBalanceRaw,
+      rankingHref: item.parentReplyId ? `/p/${item.parentReplyId}` : `/p/${item.parentAccountId}`,
     })),
   ];
 
@@ -97,13 +101,6 @@ function ThreadPage({
   return (
     <main className="min-h-screen bg-[#f8fbfd] px-4 py-5">
       <section className="mx-auto max-w-3xl">
-        <LevelNavigator
-          currentLevel={currentLevel + 1}
-          levels={[
-            { level: 1, href: "/" },
-            ...chain.map((node) => ({ level: node.level + 1, href: `/p/${node.id}` })),
-          ]}
-        />
         <div className="mt-4 grid gap-3">
           {chain.map((node) => (
             <article
@@ -111,7 +108,12 @@ function ThreadPage({
               className="rounded border border-[var(--nano-line)] bg-white p-4 shadow-sm"
             >
               <div className="flex items-start justify-between gap-3">
-                <p className="font-semibold text-[var(--nano-deep)]">Nivel {node.level}</p>
+                <Link
+                  className="focus-ring rounded text-sm font-semibold text-[var(--nano-blue)] underline underline-offset-4"
+                  href={node.rankingHref}
+                >
+                  Nivel {node.level}
+                </Link>
                 <p className="shrink-0 text-sm font-semibold text-[var(--nano-deep)]">
                   {formatRoundedXno(rawToXno(node.balanceRaw))} XNO
                 </p>
