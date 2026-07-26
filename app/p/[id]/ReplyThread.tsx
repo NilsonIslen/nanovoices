@@ -27,6 +27,7 @@ type PaymentRequest = {
 
 type RequestStatus = {
   status: string;
+  existingId: string | null;
   existingMessage: string;
 };
 
@@ -34,6 +35,8 @@ type StoredPaymentRequest = {
   request: PaymentRequest;
   paidRequestId: string | null;
 };
+
+type CardAction = "edit" | "delete" | "reply";
 
 const REFRESH_MS = 30000;
 const PAYMENT_STATUS_POLL_MS = 12000;
@@ -48,20 +51,25 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
   const [loading, setLoading] = useState(false);
   const [validatingPayment, setValidatingPayment] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [activeCard, setActiveCard] = useState<{ id: string; action: CardAction } | null>(null);
   const charsLeft = MESSAGE_MAX_LENGTH - message.length;
   const remainingSeconds = useCountdown(paymentRequest?.expiresAt);
   const editorReady = Boolean(paidRequestId);
   const paymentStorageKey = `nanovoices:reply-request:${parentId}`;
 
-  async function startPayment() {
+  async function startPayment(
+    requestParentId = parentId,
+    card?: { id: string; action: CardAction },
+  ) {
     setError("");
     setLoading(true);
+    setActiveCard(card ?? null);
 
     try {
       const response = await fetch("/api/publication-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parentId }),
+        body: JSON.stringify({ parentId: requestParentId }),
       });
       const data = await readJsonResponse<PaymentRequest & { error?: string }>(response);
 
@@ -98,6 +106,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
       setRequestStatus(null);
       forgetPaymentRequest(paymentStorageKey);
       setRefreshKey((current) => current + 1);
+      setActiveCard(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
     } finally {
@@ -122,6 +131,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
       setRequestStatus(null);
       forgetPaymentRequest(paymentStorageKey);
       setRefreshKey((current) => current + 1);
+      setActiveCard(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
     } finally {
@@ -143,6 +153,16 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
         setRequestStatus(data);
 
         if (data.status === "COMPLETED") {
+          if (
+            activeCard &&
+            activeCard.action !== "reply" &&
+            data.existingId !== activeCard.id
+          ) {
+            setError("El pago no proviene de la cuenta propietaria de este mensaje.");
+            setPaymentRequest(null);
+            forgetPaymentRequest(paymentStorageKey);
+            return false;
+          }
           setPaidRequestId(request.id);
           setMessage(data.existingMessage ?? "");
           setPaymentRequest(null);
@@ -162,7 +182,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
         }
       }
     },
-    [paymentStorageKey],
+    [activeCard, paymentStorageKey],
   );
 
   useEffect(() => {
@@ -256,14 +276,14 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
         className="mt-2 rounded-2xl border border-[var(--nano-line)] bg-white p-3 shadow-sm md:p-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (editorReady) {
+          if (editorReady && !activeCard) {
             publishPaidMessage();
           } else {
             startPayment();
           }
         }}
       >
-        {editorReady ? (
+        {editorReady && !activeCard ? (
           <>
             <div className="flex items-center justify-between gap-4">
               <label className="block text-sm font-semibold text-slate-800" htmlFor="replyMessage">
@@ -285,7 +305,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
 
         {error ? <p className="mt-4 text-sm font-medium text-red-700">{error}</p> : null}
 
-        <div className={editorReady || error ? "mt-3" : ""}>
+        <div className={(editorReady && !activeCard) || error ? "mt-3" : ""}>
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               className="focus-ring flex-1 rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -293,11 +313,11 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
             >
               {loading
                 ? "Procesando..."
-                : editorReady
+                : editorReady && !activeCard
                   ? "Guardar mensaje"
-                  : "Gestiona mensajes por 0,02 XNO"}
+                  : "Mensaje de nueva cuenta"}
             </button>
-            {editorReady && requestStatus?.existingMessage ? (
+            {editorReady && !activeCard && requestStatus?.existingMessage ? (
               <button
                 className="focus-ring rounded-xl border border-red-300 bg-white px-4 py-3 font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                 type="button"
@@ -311,7 +331,7 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
         </div>
       </form>
 
-      {paymentRequest ? (
+      {paymentRequest && !activeCard ? (
         <div className="mt-4 rounded-2xl border border-[var(--nano-line)] bg-[#eef7fd] p-4">
           <div className="grid gap-4 md:grid-cols-[220px_1fr]">
             <img
@@ -365,7 +385,57 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
       <div className="mt-3">
         <div className="grid gap-3">
           {replies.map((reply) => (
-            <ReplyCard key={reply.id} reply={reply} />
+            <div key={reply.id}>
+              <ReplyCard
+                reply={reply}
+                disabled={loading}
+                onEdit={() => startPayment(parentId, { id: reply.id, action: "edit" })}
+                onDelete={() => startPayment(parentId, { id: reply.id, action: "delete" })}
+                onReply={() => startPayment(reply.id, { id: reply.id, action: "reply" })}
+              />
+              {activeCard?.id === reply.id && paymentRequest ? (
+                <div className="mt-2 rounded-2xl border border-[var(--nano-line)] bg-[#eef7fd] p-4">
+                  <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+                    <img className="h-52 w-52 rounded border border-[var(--nano-line)] bg-white p-3" src={paymentRequest.qrCodeDataUrl} alt="Código QR de pago Nano" />
+                    <div>
+                      <h3 className="text-xl font-semibold text-[var(--nano-deep)]">Esperando el pago</h3>
+                      <p className="mt-2 text-sm text-slate-700">Envía 0,02 XNO desde la cuenta propietaria.</p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <a className="focus-ring rounded-xl bg-[var(--nano-blue)] px-4 py-3 text-sm font-semibold text-white" href={paymentRequest.paymentUri}>Pagar con wallet Nano</a>
+                        <button className="focus-ring rounded-xl border border-[var(--nano-blue)] bg-white px-4 py-3 text-sm font-semibold text-[var(--nano-blue)]" type="button" onClick={() => validatePaymentStatus(paymentRequest)} disabled={validatingPayment}>
+                          {validatingPayment ? "Validando..." : "Validar pago"}
+                        </button>
+                        <button className="focus-ring rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold" type="button" onClick={() => { setPaymentRequest(null); setRequestStatus(null); setActiveCard(null); forgetPaymentRequest(paymentStorageKey); }}>Cancelar</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              {activeCard?.id === reply.id && editorReady ? (
+                <form
+                  className="mt-2 rounded-2xl border border-[var(--nano-line)] bg-white p-4 shadow-sm"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (activeCard.action === "delete") deletePaidMessage();
+                    else publishPaidMessage();
+                  }}
+                >
+                  {activeCard.action !== "delete" ? (
+                    <>
+                      <label className="block text-sm font-semibold" htmlFor={`reply-${reply.id}`}>
+                        {activeCard.action === "reply" ? "Tu respuesta" : "Edita tu mensaje"}
+                      </label>
+                      <textarea id={`reply-${reply.id}`} className="focus-ring mt-2 min-h-24 w-full rounded-xl border border-slate-300 p-3" value={message} maxLength={MESSAGE_MAX_LENGTH} onChange={(event) => setMessage(event.target.value)} />
+                    </>
+                  ) : (
+                    <p className="text-sm font-semibold text-red-700">Confirma la eliminación del mensaje y todas sus respuestas.</p>
+                  )}
+                  <button className={`focus-ring mt-3 w-full rounded-xl px-4 py-3 font-semibold text-white ${activeCard.action === "delete" ? "bg-red-700" : "bg-[var(--nano-blue)]"}`} disabled={loading}>
+                    {activeCard.action === "delete" ? "Eliminar mensaje" : activeCard.action === "reply" ? "Publicar respuesta" : "Guardar cambios"}
+                  </button>
+                </form>
+              ) : null}
+            </div>
           ))}
           {replies.length === 0 ? (
             <p className="rounded border border-[var(--nano-line)] bg-white px-4 py-3 text-sm text-slate-600">
@@ -405,7 +475,19 @@ function forgetPaymentRequest(storageKey: string) {
   window.localStorage.removeItem(storageKey);
 }
 
-function ReplyCard({ reply }: { reply: ReplyItem }) {
+function ReplyCard({
+  reply,
+  onEdit,
+  onDelete,
+  onReply,
+  disabled,
+}: {
+  reply: ReplyItem;
+  onEdit: () => void;
+  onDelete: () => void;
+  onReply: () => void;
+  disabled: boolean;
+}) {
   return (
     <article className="rounded border border-[var(--nano-line)] bg-white p-4 shadow-sm">
       <div className="flex min-w-0 gap-3">
@@ -429,12 +511,17 @@ function ReplyCard({ reply }: { reply: ReplyItem }) {
               {reply.directReplies} respuestas · {reply.threadLevels} niveles
             </span>
           </div>
-          <a
-            className="focus-ring mt-3 inline-flex rounded-xl border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]"
-            href={reply.publicUrl}
-          >
-            Abrir hilo
-          </a>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button className="focus-ring rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold" type="button" onClick={onEdit} disabled={disabled}>Editar</button>
+            <button className="focus-ring rounded-xl border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700" type="button" onClick={onDelete} disabled={disabled}>Eliminar</button>
+            <button className="focus-ring rounded-xl border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]" type="button" onClick={onReply} disabled={disabled}>Responder</button>
+            <a
+              className="focus-ring inline-flex rounded-xl bg-[var(--nano-blue)] px-3 py-2 text-sm font-semibold text-white"
+              href={reply.publicUrl}
+            >
+              Ver hilo
+            </a>
+          </div>
         </div>
       </div>
     </article>

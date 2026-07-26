@@ -22,6 +22,7 @@ type RequestStatus = {
   completedAt: string | null;
   paymentHash: string | null;
   rank: number | null;
+  existingId: string | null;
   existingMessage: string;
   published: boolean;
 };
@@ -41,6 +42,8 @@ type RankingItem = {
   directReplies: number;
   threadLevels: number;
 };
+
+type CardAction = "edit" | "delete" | "reply";
 
 const RANKING_REFRESH_MS = 30000;
 const PAYMENT_STATUS_POLL_MS = 12000;
@@ -62,20 +65,22 @@ export default function Home() {
   const [rankingRefreshKey, setRankingRefreshKey] = useState(0);
   const [rankingError, setRankingError] = useState("");
   const [validatingPayment, setValidatingPayment] = useState(false);
+  const [activeCard, setActiveCard] = useState<{ id: string; action: CardAction } | null>(null);
   const viewerCount = useViewerCount();
 
   const remainingSeconds = useCountdown(paymentRequest?.expiresAt);
   const charsLeft = MESSAGE_MAX_LENGTH - message.length;
 
-  async function startPayment() {
+  async function startPayment(parentId?: string, card?: { id: string; action: CardAction }) {
     setError("");
     setLoading(true);
+    setActiveCard(card ?? null);
 
     try {
       const response = await fetch("/api/publication-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify(parentId ? { parentId } : {}),
       });
       const data = await readJsonResponse<PaymentRequest & { error?: string }>(response);
 
@@ -112,6 +117,7 @@ export default function Home() {
       forgetPaymentRequest();
       setMessage("");
       setRankingRefreshKey((current) => current + 1);
+      setActiveCard(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
     } finally {
@@ -136,6 +142,7 @@ export default function Home() {
       forgetPaymentRequest();
       setMessage("");
       setRankingRefreshKey((current) => current + 1);
+      setActiveCard(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Error inesperado.");
     } finally {
@@ -164,6 +171,7 @@ export default function Home() {
     setPaymentRequest(null);
     setRequestStatus(null);
     setError("");
+    setActiveCard(null);
     forgetPaymentRequest();
   }
 
@@ -180,6 +188,16 @@ export default function Home() {
       setRequestStatus(data);
 
       if (data.status === "COMPLETED") {
+        if (
+          activeCard &&
+          activeCard.action !== "reply" &&
+          data.existingId !== activeCard.id
+        ) {
+          setError("El pago no proviene de la cuenta propietaria de este mensaje.");
+          setPaymentRequest(null);
+          forgetPaymentRequest();
+          return false;
+        }
         setPaidRequestId(request.id);
         setMessage(data.existingMessage ?? "");
         setRankingRefreshKey((current) => current + 1);
@@ -199,7 +217,7 @@ export default function Home() {
         setValidatingPayment(false);
       }
     }
-  }, []);
+  }, [activeCard]);
 
   useEffect(() => {
     let cancelled = false;
@@ -363,14 +381,14 @@ export default function Home() {
               className="mt-2 rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-3 shadow-sm md:p-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (editorReady) {
+                if (editorReady && !activeCard) {
                   publishPaidMessage();
                 } else {
                   startPayment();
                 }
               }}
             >
-            {editorReady ? (
+            {editorReady && !activeCard ? (
               <>
               <div className="flex items-center justify-between gap-4">
               <label className="block text-sm font-semibold text-slate-800" htmlFor="message">
@@ -392,7 +410,7 @@ export default function Home() {
 
             {error ? <p className="mt-4 text-sm font-medium text-red-700">{error}</p> : null}
 
-            <div className={editorReady || error ? "mt-3" : ""}>
+            <div className={(editorReady && !activeCard) || error ? "mt-3" : ""}>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   className="focus-ring flex-1 rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -400,11 +418,11 @@ export default function Home() {
                 >
                   {loading
                     ? "Procesando..."
-                    : editorReady
+                    : editorReady && !activeCard
                       ? "Guardar mensaje"
-                      : "Gestiona mensajes por 0,02 XNO"}
+                      : "Mensaje de nueva cuenta"}
                 </button>
-                {editorReady && requestStatus?.existingMessage ? (
+                {editorReady && !activeCard && requestStatus?.existingMessage ? (
                   <button
                     className="focus-ring rounded-xl border border-red-300 bg-white px-4 py-3 font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                     type="button"
@@ -421,7 +439,7 @@ export default function Home() {
         </div>
       </section>
 
-      {paymentRequest ? (
+      {paymentRequest && !activeCard ? (
         <PaymentPanel
           request={paymentRequest}
           status={requestStatus}
@@ -441,7 +459,72 @@ export default function Home() {
 
         <div className="grid gap-3">
           {ranking.map((item) => (
-            <RankingCard key={item.id} item={item} />
+            <div key={item.id}>
+              <RankingCard
+                item={item}
+                onEdit={() => startPayment(undefined, { id: item.id, action: "edit" })}
+                onDelete={() => startPayment(undefined, { id: item.id, action: "delete" })}
+                onReply={() => startPayment(item.id, { id: item.id, action: "reply" })}
+                disabled={loading}
+              />
+              {activeCard?.id === item.id && paymentRequest ? (
+                <PaymentPanel
+                  request={paymentRequest}
+                  status={requestStatus}
+                  remainingSeconds={remainingSeconds}
+                  onCancel={cancelPaymentView}
+                  onValidate={() => validatePaymentStatus(paymentRequest)}
+                  validating={validatingPayment}
+                />
+              ) : null}
+              {activeCard?.id === item.id && editorReady ? (
+                <form
+                  className="mt-2 rounded-2xl border border-[var(--nano-line)] bg-[#fbfdff] p-4 shadow-sm"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (activeCard.action === "delete") {
+                      deletePaidMessage();
+                    } else {
+                      publishPaidMessage();
+                    }
+                  }}
+                >
+                  {activeCard.action !== "delete" ? (
+                    <>
+                      <label className="block text-sm font-semibold text-slate-800" htmlFor={`message-${item.id}`}>
+                        {activeCard.action === "reply" ? "Tu respuesta" : "Edita tu mensaje"}
+                      </label>
+                      <textarea
+                        id={`message-${item.id}`}
+                        className="focus-ring mt-2 min-h-24 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+                        value={message}
+                        maxLength={MESSAGE_MAX_LENGTH}
+                        onChange={(event) => setMessage(event.target.value)}
+                      />
+                    </>
+                  ) : (
+                    <p className="text-sm font-semibold text-red-700">
+                      Confirma la eliminación del mensaje y todas sus respuestas.
+                    </p>
+                  )}
+                  {error ? <p className="mt-3 text-sm font-medium text-red-700">{error}</p> : null}
+                  <button
+                    className={`focus-ring mt-3 w-full rounded-xl px-4 py-3 font-semibold text-white disabled:opacity-60 ${
+                      activeCard.action === "delete" ? "bg-red-700" : "bg-[var(--nano-blue)]"
+                    }`}
+                    disabled={loading}
+                  >
+                    {loading
+                      ? "Procesando..."
+                      : activeCard.action === "delete"
+                        ? "Eliminar mensaje"
+                        : activeCard.action === "reply"
+                          ? "Publicar respuesta"
+                          : "Guardar cambios"}
+                  </button>
+                </form>
+              ) : null}
+            </div>
           ))}
         </div>
 
@@ -613,7 +696,19 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RankingCard({ item }: { item: RankingItem }) {
+function RankingCard({
+  item,
+  onEdit,
+  onDelete,
+  onReply,
+  disabled,
+}: {
+  item: RankingItem;
+  onEdit: () => void;
+  onDelete: () => void;
+  onReply: () => void;
+  disabled: boolean;
+}) {
   const prominent = item.rank <= 3;
 
   return (
@@ -655,12 +750,23 @@ function RankingCard({ item }: { item: RankingItem }) {
           <p className="mt-1 text-sm text-slate-500">
             {item.directReplies} respuestas · {item.threadLevels} niveles
           </p>
-          <a
-            className="focus-ring mt-3 inline-flex rounded-xl border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]"
-            href={item.publicUrl}
-          >
-            Abrir hilo
-          </a>
+          <div className="mt-3 flex flex-wrap gap-2 md:justify-end">
+            <button className="focus-ring rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold" type="button" onClick={onEdit} disabled={disabled}>
+              Editar
+            </button>
+            <button className="focus-ring rounded-xl border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700" type="button" onClick={onDelete} disabled={disabled}>
+              Eliminar
+            </button>
+            <button className="focus-ring rounded-xl border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]" type="button" onClick={onReply} disabled={disabled}>
+              Responder
+            </button>
+            <a
+              className="focus-ring inline-flex rounded-xl bg-[var(--nano-blue)] px-3 py-2 text-sm font-semibold text-white"
+              href={item.publicUrl}
+            >
+              Ver hilo
+            </a>
+          </div>
         </div>
       </div>
     </article>

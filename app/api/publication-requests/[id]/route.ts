@@ -57,6 +57,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       completedAt: publicationRequest.completedAt?.toISOString() ?? null,
       paymentHash: publicationRequest.paymentHash,
       rank,
+      existingId: existing?.id ?? null,
       existingMessage: existing?.message ?? "",
       published: Boolean(existing),
     });
@@ -447,9 +448,9 @@ async function findExistingMessage(
   if (!replyToAccountId && !replyToReplyId) {
     const account = await prisma.verifiedAccount.findUnique({
       where: { nanoAddress },
-      select: { currentMessage: true },
+      select: { id: true, currentMessage: true },
     });
-    return account ? { message: account.currentMessage } : null;
+    return account ? { id: account.id, message: account.currentMessage } : null;
   }
 
   const parent = await resolveRequestParent(prisma, replyToAccountId, replyToReplyId);
@@ -461,7 +462,7 @@ async function findExistingMessage(
       parentAccountId: parent.parentAccountId,
       parentReplyId: parent.parentReplyId,
     },
-    select: { message: true },
+    select: { id: true, message: true },
   });
 }
 
