@@ -45,6 +45,7 @@ type RankingItem = {
 const RANKING_REFRESH_MS = 30000;
 const PAYMENT_STATUS_POLL_MS = 12000;
 const PAYMENT_STORAGE_KEY = "nanovoices:publication-request";
+const VIEWER_STORAGE_KEY = "nanovoices:viewer-id";
 const NANO_NODE_MONITOR_URL = "http://monitor.167.71.17.126.nip.io";
 
 export default function Home() {
@@ -61,6 +62,7 @@ export default function Home() {
   const [rankingRefreshKey, setRankingRefreshKey] = useState(0);
   const [rankingError, setRankingError] = useState("");
   const [validatingPayment, setValidatingPayment] = useState(false);
+  const viewerCount = useViewerCount();
 
   const remainingSeconds = useCountdown(paymentRequest?.expiresAt);
   const charsLeft = MESSAGE_MAX_LENGTH - message.length;
@@ -307,14 +309,27 @@ export default function Home() {
                   </h1>
                 </div>
               </div>
-              <a
-                className="focus-ring shrink-0 whitespace-nowrap rounded border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]"
-                href={NANO_NODE_MONITOR_URL}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Nodo Nano
-              </a>
+              <div className="flex shrink-0 items-center gap-3">
+                <a
+                  className="focus-ring whitespace-nowrap rounded border border-[var(--nano-blue)] bg-white px-3 py-2 text-sm font-semibold text-[var(--nano-blue)]"
+                  href={NANO_NODE_MONITOR_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Nodo Nano
+                </a>
+                <div
+                  className="flex min-w-[5.25rem] items-center justify-center gap-1.5 rounded-full border border-[var(--nano-line)] bg-[#f7fcff] px-2.5 py-2 text-[var(--nano-blue)] shadow-sm"
+                  aria-label={`${viewerCount ?? 0} personas viendo la aplicación ahora`}
+                  title="Personas viendo la aplicación ahora"
+                >
+                  <EyeIcon />
+                  <span className="min-w-5 text-center text-sm font-bold tabular-nums text-[var(--nano-deep)]">
+                    {viewerCount ?? "—"}
+                  </span>
+                  <EyeIcon />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -404,6 +419,46 @@ export default function Home() {
       </section>
     </main>
   );
+}
+
+function EyeIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none">
+      <path
+        d="M2.5 12s3.2-5 9.5-5 9.5 5 9.5 5-3.2 5-9.5 5-9.5-5-9.5-5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+    </svg>
+  );
+}
+
+function useViewerCount() {
+  const [count, setCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let viewerId = localStorage.getItem(VIEWER_STORAGE_KEY);
+
+    if (!viewerId) {
+      viewerId = crypto.randomUUID();
+      localStorage.setItem(VIEWER_STORAGE_KEY, viewerId);
+    }
+
+    const events = new EventSource(`/api/viewers?id=${encodeURIComponent(viewerId)}`);
+
+    events.onmessage = (event) => {
+      const nextCount = Number.parseInt(event.data, 10);
+      if (Number.isSafeInteger(nextCount) && nextCount >= 0) {
+        setCount(nextCount);
+      }
+    };
+
+    return () => events.close();
+  }, []);
+
+  return count;
 }
 
 function readStoredPaymentRequest() {
