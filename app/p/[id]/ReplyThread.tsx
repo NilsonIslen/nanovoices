@@ -105,6 +105,30 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
     }
   }
 
+  async function deletePaidMessage() {
+    if (!paidRequestId || !window.confirm("¿Eliminar tu mensaje y todas sus respuestas?")) return;
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch(`/api/publication-requests/${paidRequestId}`, {
+        method: "DELETE",
+      });
+      const data = await readJsonResponse<{ error?: string }>(response);
+      if (!response.ok) throw new Error(data.error ?? "No se pudo eliminar la respuesta.");
+      setMessage("");
+      setPaidRequestId(null);
+      setPaymentRequest(null);
+      setRequestStatus(null);
+      forgetPaymentRequest(paymentStorageKey);
+      setRefreshKey((current) => current + 1);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Error inesperado.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const validatePaymentStatus = useCallback(
     async (request: PaymentRequest, interactive = true) => {
       if (interactive) {
@@ -263,14 +287,26 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
 
         <div className={editorReady || error ? "mt-3" : ""}>
           <p className="mb-1 text-sm font-semibold text-slate-700">
-            Crea o edita tu mensaje en el nivel actual por 0,02 XNO.
+            Crea, edita o elimina tu mensaje en el nivel actual por 0,02 XNO.
           </p>
-          <button
-            className="focus-ring w-full rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={loading}
-          >
-            {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Crear o editar mensaje"}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              className="focus-ring flex-1 rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={loading}
+            >
+              {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Gestionar mensaje"}
+            </button>
+            {editorReady && requestStatus?.existingMessage ? (
+              <button
+                className="focus-ring rounded-xl border border-red-300 bg-white px-4 py-3 font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+                disabled={loading}
+                onClick={deletePaidMessage}
+              >
+                Eliminar mensaje
+              </button>
+            ) : null}
+          </div>
         </div>
       </form>
 

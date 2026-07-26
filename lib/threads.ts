@@ -42,6 +42,15 @@ export async function resolveThreadContext(tx: Tx, parentId?: string | null): Pr
 }
 
 export async function deleteAccountDescendants(tx: Prisma.TransactionClient, accountId: string) {
+  await tx.$executeRaw`
+    WITH affected_replies AS (
+      SELECT "id" FROM "Reply" WHERE "parentAccountId" = ${accountId}
+    )
+    UPDATE "PublicationRequest"
+    SET "replyToAccountId" = NULL, "replyToReplyId" = NULL
+    WHERE "replyToAccountId" = ${accountId}
+       OR "replyToReplyId" IN (SELECT "id" FROM affected_replies)
+  `;
   await tx.reply.deleteMany({ where: { parentAccountId: accountId } });
 }
 
@@ -53,8 +62,28 @@ export async function deleteReplyDescendants(tx: Prisma.TransactionClient, reply
       SELECT r."id" FROM "Reply" r
       INNER JOIN descendants d ON r."parentReplyId" = d."id"
     )
+    UPDATE "PublicationRequest"
+    SET "replyToAccountId" = NULL, "replyToReplyId" = NULL
+    WHERE "replyToReplyId" IN (SELECT "id" FROM descendants)
+  `;
+  await tx.$executeRaw`
+    WITH RECURSIVE descendants AS (
+      SELECT "id" FROM "Reply" WHERE "parentReplyId" = ${replyId}
+      UNION ALL
+      SELECT r."id" FROM "Reply" r
+      INNER JOIN descendants d ON r."parentReplyId" = d."id"
+    )
     DELETE FROM "Reply" WHERE "id" IN (SELECT "id" FROM descendants)
   `;
+}
+
+export async function deleteReplyTree(tx: Prisma.TransactionClient, replyId: string) {
+  await deleteReplyDescendants(tx, replyId);
+  await tx.publicationRequest.updateMany({
+    where: { replyToReplyId: replyId },
+    data: { replyToReplyId: null, replyToAccountId: null },
+  });
+  await tx.reply.delete({ where: { id: replyId } });
 }
 
 export function rankByBalanceThenDate<T extends { cachedBalanceRaw: string; createdAt: Date }>(items: T[]) {

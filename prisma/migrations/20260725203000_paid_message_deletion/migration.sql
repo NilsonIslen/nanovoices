@@ -1,0 +1,1 @@
+ALTER TYPE "OperationType" ADD VALUE 'DELETION';

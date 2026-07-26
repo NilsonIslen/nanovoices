@@ -15,7 +15,11 @@ import { getReceiverHistory, getReceiverReceivable, isNanoHash } from "@/lib/nan
 import { isAcceptedPaymentAmount, processPaymentHash } from "@/lib/payments";
 import { prisma } from "@/lib/prisma";
 import { sanitizeMessage } from "@/lib/sanitize";
-import { deleteAccountDescendants, deleteReplyDescendants } from "@/lib/threads";
+import {
+  deleteAccountDescendants,
+  deleteReplyDescendants,
+  deleteReplyTree,
+} from "@/lib/threads";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
 const PAYMENT_CLAIM_GRACE_MS = 15 * 60_000;
@@ -171,6 +175,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           where: { blockHash: publicationRequest.paymentHash },
           data: { operationType },
         });
+        await tx.publicationRequest.update({
+          where: { id },
+          data: { status: PublicationRequestStatus.REPLACED },
+        });
 
         return { id: account.id, kind: "publication" as const, nanoAddress: account.nanoAddress };
       }
@@ -220,6 +228,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         where: { blockHash: publicationRequest.paymentHash },
         data: { operationType: OperationType.REPLY },
       });
+      await tx.publicationRequest.update({
+        where: { id },
+        data: { status: PublicationRequestStatus.REPLACED },
+      });
 
       return { id: reply.id, kind: "reply" as const, nanoAddress: reply.nanoAddress };
     });
@@ -237,6 +249,90 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     console.error("No se pudo publicar el mensaje", error);
     return NextResponse.json(
       { error: "No se pudo publicar el mensaje. Revisa PostgreSQL." },
+      { status: 503 },
+    );
+  }
+}
+
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await context.params;
+    const result = await prisma.$transaction(async (tx) => {
+      const publicationRequest = await tx.publicationRequest.findUnique({ where: { id } });
+
+      if (!publicationRequest) {
+        return { error: "Solicitud no encontrada." as const, status: 404 };
+      }
+
+      if (
+        publicationRequest.status !== PublicationRequestStatus.COMPLETED ||
+        !publicationRequest.nanoAddress ||
+        !publicationRequest.paymentHash
+      ) {
+        return { error: "Primero debe confirmarse el pago." as const, status: 409 };
+      }
+
+      if (!publicationRequest.replyToAccountId && !publicationRequest.replyToReplyId) {
+        const account = await tx.verifiedAccount.findUnique({
+          where: { nanoAddress: publicationRequest.nanoAddress },
+          select: { id: true },
+        });
+
+        if (!account) {
+          return { error: "Esta cuenta no tiene un mensaje para eliminar." as const, status: 404 };
+        }
+
+        await deleteAccountDescendants(tx, account.id);
+        await tx.messageHistory.deleteMany({ where: { verifiedAccountId: account.id } });
+        await tx.verifiedAccount.delete({ where: { id: account.id } });
+      } else {
+        const parent = await resolveRequestParent(
+          tx,
+          publicationRequest.replyToAccountId,
+          publicationRequest.replyToReplyId,
+        );
+
+        if (!parent) {
+          return { error: "El mensaje padre ya no existe." as const, status: 404 };
+        }
+
+        const reply = await tx.reply.findFirst({
+          where: {
+            nanoAddress: publicationRequest.nanoAddress,
+            parentAccountId: parent.parentAccountId,
+            parentReplyId: parent.parentReplyId,
+          },
+          select: { id: true },
+        });
+
+        if (!reply) {
+          return { error: "Esta cuenta no tiene un mensaje para eliminar en este nivel." as const, status: 404 };
+        }
+
+        await deleteReplyTree(tx, reply.id);
+      }
+
+      await tx.payment.updateMany({
+        where: { blockHash: publicationRequest.paymentHash },
+        data: { operationType: "DELETION" as OperationType },
+      });
+      await tx.publicationRequest.update({
+        where: { id },
+        data: { status: PublicationRequestStatus.REPLACED },
+      });
+
+      return { deleted: true as const };
+    });
+
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("No se pudo eliminar el mensaje", error);
+    return NextResponse.json(
+      { error: "No se pudo eliminar el mensaje. Revisa PostgreSQL." },
       { status: 503 },
     );
   }
