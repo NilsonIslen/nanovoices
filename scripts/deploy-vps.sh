@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/root/nanovoices}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="${APP_DIR:-$(dirname -- "$SCRIPT_DIR")}"
 BRANCH="${BRANCH:-main}"
-WEB_SERVICE="${WEB_SERVICE:-nanovoices-web.service}"
-WORKER_SERVICE="${WORKER_SERVICE:-nanovoices-worker.service}"
+WEB_SERVICE="${WEB_SERVICE:-nanovoices-home.service}"
+WORKER_SERVICE="${WORKER_SERVICE:-nanovoices-worker-home.service}"
 
 echo "Entrando a ${APP_DIR}"
 cd "$APP_DIR"
