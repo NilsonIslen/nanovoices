@@ -294,7 +294,11 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
               className="focus-ring flex-1 rounded-xl bg-[var(--nano-blue)] px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               disabled={loading}
             >
-              {loading ? "Procesando..." : editorReady ? "Guardar mensaje" : "Gestionar mensaje"}
+              {loading
+                ? "Procesando..."
+                : editorReady
+                  ? "Guardar mensaje"
+                  : "Crear o editar mensaje"}
             </button>
             {editorReady && requestStatus?.existingMessage ? (
               <button
@@ -304,6 +308,15 @@ export function ReplyThread({ parentId, nextLevel }: { parentId: string; nextLev
                 onClick={deletePaidMessage}
               >
                 Eliminar mensaje
+              </button>
+            ) : !editorReady ? (
+              <button
+                className="focus-ring rounded-xl border border-red-300 bg-white px-4 py-3 font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+                disabled={loading}
+                onClick={startPayment}
+              >
+                Eliminar mensaje · 0,02 XNO
               </button>
             ) : null}
           </div>
